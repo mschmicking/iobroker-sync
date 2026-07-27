@@ -1,0 +1,17 @@
+node_modules/
+dist/
+dist-test/
+
+# Local Claude Code settings (machine/session-specific)
+.claude/settings.local.json
+
+# Local sync state — machine-specific, contains the sync baseline and object backups
+.iobroker-sync/
+
+# Downloaded ioBroker type definitions
+.iobroker/
+
+# Secrets consumed by the __IOBROKER_SECRET_*__ placeholder mechanism
+.env
+
+*.log
