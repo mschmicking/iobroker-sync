@@ -11,7 +11,4 @@ dist-test/
 # Downloaded ioBroker type definitions
 .iobroker/
 
-# Secrets consumed by the __IOBROKER_SECRET_*__ placeholder mechanism
-.env
-
 *.log

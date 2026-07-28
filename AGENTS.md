@@ -35,6 +35,12 @@ instruction from the user:
    are implemented as copy-verify-delete. The verification compares the actual source
    text. Checking only that "something exists at the new id" is not verification — a
    truncated copy would pass and the original would be destroyed.
+6. **`backup` is read-only and all-or-nothing.** It fetches objects and writes files,
+   never mutating the server. It stores the *whole* object, not just the source, because
+   `push` cannot write `common.enabled` or `common.engine` back (invariant 2) — so
+   `objects/*.json` is the only record of those. A partial snapshot is worse than none,
+   so any write failure aborts with a `UserError` rather than leaving a plausible-looking
+   half-snapshot behind.
 
 ## Testing against a real instance
 
@@ -97,7 +103,7 @@ npm run test:unit  # pure-logic tests only
 
 ## Test coverage
 
-116 tests, all against `test/fake-server.ts` — no test may touch a real instance.
+128 tests, all against `test/fake-server.ts` — no test may touch a real instance.
 
 Directly tested: `client/socket`, `client/objects`, `sync/compare`, `sync/mapping`,
 `sync/safe-path` (path traversal, symlink-file writes, symlinked-directory writes),
@@ -115,8 +121,10 @@ pulls the rest" in `test/commands-sync.test.ts`.
 - `commands/watch.ts` — only manually smoke-tested. The echo-suppression logic
   (ignoring the adapter's `compiled`/`sourceHash` write-back) is subtle and a
   regression there means an infinite push loop.
-- `commands/diff.ts`, `commands/init.ts` — manually exercised against a live
-  instance only.
+- `commands/diff.ts` — manually exercised against a live instance only.
+- `commands/init.ts` — the tsconfig scaffolding is covered by
+  `test/commands-init.test.ts`; `probeConnection` and the `javascript.d.ts`
+  download are not.
 - `config.ts`, `cli.ts`, `client/auth.ts` — the auth-disabled fast path is the only
   one ever run; the OAuth2 and legacy login paths have never executed.
 
@@ -124,5 +132,29 @@ pulls the rest" in `test/commands-sync.test.ts`.
 
 - Self-signed certificates are honoured on the websocket path but not on the HTTP
   auth path (would require an `undici` Agent).
-- `init --types` (tsconfig + ioBroker type definitions) is implemented but has not
-  been exercised end-to-end.
+- `init --types` writes the ioBroker type definitions, but the download of
+  `javascript.d.ts` from GitHub has only been exercised against a live network.
+
+### Typechecking pulled scripts
+
+`init --types` writes its tsconfig to **the script root** (`scripts/tsconfig.json`),
+never merging into a `tsconfig.json` at the project root. Merging is what the command
+used to do, and in a repo that already has a build config it injects `scripts/**` into
+a config owning `rootDir`/`outDir` and breaks the build with TS6059. The scripts config
+sets `noEmit`, which keeps `rootDir` out of the picture entirely.
+
+Pulled scripts **cannot be typechecked as a single program**. Each ioBroker script runs
+in its own sandbox scope, so top-level names are private to it — but one `tsc` program
+puts them all in one global scope, where they collide (`TS2451` on a shared `axios`,
+`TS2393` on a shared `sendMessage`). These are artifacts of joint checking, not runtime
+bugs; scripts must be checked one program per file. The generated
+`scripts/tsconfig.json` is for editor intellisense and **will** show those false
+collisions.
+
+### This repo holds no scripts
+
+The CLI is a tool; the scripts it syncs live in their own repository
+(`mschmicking/iobroker-scripts`), along with their tests and a per-file typecheck
+runner. Do not add a `scripts/` directory here — running `iob-sync init` inside this
+repo is what caused the `tsconfig.json` breakage above. Test commands against
+`test/fake-server.ts` and temporary project directories instead.

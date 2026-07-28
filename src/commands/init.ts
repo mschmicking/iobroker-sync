@@ -40,58 +40,62 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /**
- * Merges our required TypeScript settings into an existing (or absent) tsconfig.json
- * without clobbering unrelated settings the user already has.
+ * Builds the tsconfig that gives the *scripts* intellisense.
+ *
+ * This deliberately lives inside the script root rather than merging into a
+ * `tsconfig.json` at the project root: the project root may already hold a build
+ * config that owns `rootDir`/`outDir`, and injecting `scripts/**` into it produces
+ * TS6059 ("not under rootDir") and breaks that build. Scripts are only ever
+ * type-*checked*, never emitted, hence `noEmit`.
+ *
+ * `typesPrefix` is the relative hop from the script root back to the project root,
+ * so the downloaded `.iobroker/types` are picked up from wherever the scripts live.
+ *
+ * `types` is intentionally left unset: naming `["node"]` hard-fails when `@types/node`
+ * is absent, whereas the default (auto-include every visible `@types`) degrades to
+ * merely missing the `NodeJS.*` names that `javascript.d.ts` refers to.
  */
-function mergeTsconfig(existing: unknown): Record<string, unknown> {
-  const base = isPlainObject(existing) ? { ...existing } : {};
-  const existingCompilerOptions = isPlainObject(base.compilerOptions) ? base.compilerOptions : {};
-  const existingTypeRoots = Array.isArray(existingCompilerOptions.typeRoots)
-    ? (existingCompilerOptions.typeRoots as unknown[]).filter((v): v is string => typeof v === 'string')
-    : [];
-  const existingInclude = Array.isArray(base.include)
-    ? (base.include as unknown[]).filter((v): v is string => typeof v === 'string')
-    : [];
-
-  const typeRoots = Array.from(new Set([...existingTypeRoots, '.iobroker/types', 'node_modules/@types']));
-  const include = Array.from(
-    new Set([...existingInclude, '**/*.js', '**/*.ts', '.iobroker/types/**/*.d.ts']),
-  );
-
+function scriptsTsconfig(typesPrefix: string): Record<string, unknown> {
   return {
-    ...base,
     compilerOptions: {
-      ...existingCompilerOptions,
       allowJs: true,
       checkJs: true,
       target: 'es2018',
-      typeRoots,
+      lib: ['ES2022'],
+      module: 'commonjs',
+      moduleResolution: 'node',
+      noEmit: true,
+      skipLibCheck: true,
     },
-    include,
+    include: ['**/*.ts', '**/*.js', `${typesPrefix}.iobroker/types/**/*.d.ts`],
   };
 }
 
-async function writeTypesScaffolding(root: string, log: Logger): Promise<void> {
-  const tsconfigPath = path.join(root, 'tsconfig.json');
+async function writeTypesScaffolding(
+  root: string,
+  scriptRoot: string,
+  force: boolean,
+  log: Logger,
+): Promise<void> {
+  const scriptRootDir = path.join(root, scriptRoot);
+  const tsconfigPath = path.join(scriptRootDir, 'tsconfig.json');
 
-  let existing: unknown = undefined;
-  if (await pathExists(tsconfigPath)) {
-    try {
-      const raw = await fs.readFile(tsconfigPath, 'utf8');
-      existing = JSON.parse(raw);
-    } catch (err) {
-      log.warn(`Could not parse existing tsconfig.json (${(err as Error).message}); it will be replaced.`);
-    }
+  // path.relative gives '..' / '../..'; normalise to a POSIX prefix for tsconfig globs.
+  const rel = path.relative(scriptRootDir, root).split(path.sep).join('/');
+  const typesPrefix = rel === '' ? '' : `${rel}/`;
+
+  if ((await pathExists(tsconfigPath)) && !force) {
+    log.warn(`${tsconfigPath} already exists; leaving it alone. Re-run with --force to replace it.`);
+  } else {
+    await fs.mkdir(scriptRootDir, { recursive: true });
+    await fs.writeFile(
+      tsconfigPath,
+      JSON.stringify(scriptsTsconfig(typesPrefix), null, 2) + '\n',
+      'utf8',
+    );
+    log.info(`Wrote ${tsconfigPath}`);
   }
-
-  const merged = mergeTsconfig(existing);
-  await fs.writeFile(tsconfigPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-  log.info(`Wrote ${tsconfigPath}`);
 
   const typesDir = path.join(root, '.iobroker', 'types');
   await fs.mkdir(typesDir, { recursive: true });
@@ -110,6 +114,14 @@ async function writeTypesScaffolding(root: string, log: Logger): Promise<void> {
 
   await fs.writeFile(path.join(typesDir, 'global.d.ts'), GLOBAL_DTS_CONTENT, 'utf8');
   log.info(`Wrote ${path.join(typesDir, 'global.d.ts')}`);
+
+  // javascript.d.ts refers to NodeJS.Timeout, NodeJS.ErrnoException and friends
+  // throughout, so without @types/node the scripts light up with "Cannot find
+  // namespace 'NodeJS'". Nothing here can install it, so say so plainly.
+  if (!(await pathExists(path.join(root, 'node_modules', '@types', 'node')))) {
+    log.warn('@types/node is not installed; javascript.d.ts needs it for NodeJS.* types.');
+    log.warn('Run: npm install --save-dev @types/node');
+  }
 }
 
 /** Read-only probe: confirms the config actually works and reports what it finds. */
@@ -164,6 +176,6 @@ export async function runInit(cwd: string, opts: InitOptions, log: Logger): Prom
   await probeConnection(config.url, config.username, config.allowSelfSigned, log);
 
   if (opts.types) {
-    await writeTypesScaffolding(root, log);
+    await writeTypesScaffolding(root, config.scriptRoot, opts.force ?? false, log);
   }
 }

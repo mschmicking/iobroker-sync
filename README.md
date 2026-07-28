@@ -54,6 +54,7 @@ sources are generated XML/JSON and are not meant to be hand-edited.
 | `status` | Show what changed, locally and remotely. |
 | `diff [pattern]` | Unified diff of local vs server. |
 | `watch` | Push on save. `--pull` also applies remote changes. |
+| `backup [pattern]` | Snapshot every script — source *and* full object — to `.iobroker-sync/backup/<timestamp>/`. Read-only against the server. |
 
 **Lifecycle**
 
@@ -84,6 +85,19 @@ This tool is deliberately conservative about destroying work:
   changed" — the last refuses to push without `--force`.
 - **Deletion is always explicit.** Only `remove`, `rename` and `move` delete anything, all
   require `--yes`, and each writes the full object JSON to `.iobroker-sync/trash/` first.
+- **`backup` gives you a restore point.** Run it before editing anything that matters:
+
+  ```bash
+  iob-sync backup
+  # ...edit, break something...
+  cp .iobroker-sync/backup/<timestamp>/sources/common/garage.ts scripts/common/garage.ts
+  iob-sync push common/garage.ts
+  ```
+
+  The snapshot also stores each full object, because `push` writes only `common.source`
+  and `common.engineType` — so `objects/*.json` is the only record of which javascript
+  instance a script ran on and whether it was enabled. Snapshots live under the gitignored
+  `.iobroker-sync/`, since they hold whatever secrets the live scripts do.
 
 ## Authentication
 

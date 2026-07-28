@@ -22,6 +22,7 @@ import { status } from './commands/status';
 import { diff } from './commands/diff';
 import { watch } from './commands/watch';
 import { list } from './commands/list';
+import { backup } from './commands/backup';
 import { start } from './commands/start';
 import { stop, restart } from './commands/stop';
 import { createNew } from './commands/new';
@@ -194,6 +195,18 @@ program
   .action(function (this: Command, pattern: string | undefined) {
     const opts = this.opts();
     return action(() => withContext(globals(), (ctx) => watch(ctx, { pattern, pull: opts.pull })))();
+  });
+
+program
+  .command('backup')
+  .description('snapshot every script (source + full object) to .iobroker-sync/backup/')
+  .argument('[pattern]', 'only scripts matching this glob')
+  .action(function (this: Command, pattern: string | undefined) {
+    return action(() =>
+      withContext(globals(), async (ctx) => {
+        await backup(ctx, { pattern });
+      }),
+    )();
   });
 
 // --------------------------------------------------------------------------
