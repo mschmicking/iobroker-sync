@@ -56,6 +56,20 @@ export async function list(ctx: CommandContext, opts: { pattern?: string }): Pro
     };
   });
 
+  // One record per script, with the real values rather than the display strings:
+  // `enabled` as a boolean and the full engine id, so a consumer never has to parse
+  // the human table back apart.
+  for (const script of scripts) {
+    ctx.log.data({
+      type: 'script',
+      id: script._id,
+      path: idToRelPath(script._id, script.common.engineType || ''),
+      engine: script.common.engine ?? null,
+      engineType: script.common.engineType || null,
+      enabled: Boolean(script.common.enabled),
+    });
+  }
+
   // Calculate column widths
   const widths = {
     enabled: 1,

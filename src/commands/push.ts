@@ -40,6 +40,7 @@ async function pushExisting(ctx: CommandContext, manifest: Manifest, status: Syn
 
   if (ctx.dryRun) {
     ctx.log.result(`push  ${status.path} (dry-run)`);
+    ctx.log.data({ type: 'push', id: status.id, path: status.path, created: false, dryRun: true });
     return;
   }
 
@@ -57,6 +58,7 @@ async function pushExisting(ctx: CommandContext, manifest: Manifest, status: Syn
   });
 
   ctx.log.result(`push  ${status.path}`);
+  ctx.log.data({ type: 'push', id: status.id, path: status.path, created: false, dryRun: false });
 }
 
 /** Creates a brand-new script on the server for a `local-only` file. */
@@ -74,6 +76,7 @@ async function pushNew(ctx: CommandContext, manifest: Manifest, status: SyncStat
 
   if (ctx.dryRun) {
     ctx.log.result(`push  ${status.path} (dry-run, new script)`);
+    ctx.log.data({ type: 'push', id: status.id, path: status.path, created: true, dryRun: true });
     return;
   }
 
@@ -106,6 +109,7 @@ async function pushNew(ctx: CommandContext, manifest: Manifest, status: SyncStat
   });
 
   ctx.log.result(`push  ${status.path} (new)`);
+  ctx.log.data({ type: 'push', id: status.id, path: status.path, created: true, dryRun: false });
 }
 
 export async function push(ctx: CommandContext, opts: PushOptions): Promise<void> {

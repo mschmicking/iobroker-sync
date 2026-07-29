@@ -16,6 +16,8 @@
 import WebSocket from 'ws';
 import {
   IoBrokerObject,
+  LogHandler,
+  LogMessage,
   ObjectChangeHandler,
   SocketClient,
   SocketOptions,
@@ -24,6 +26,7 @@ import {
 
 const READY_MESSAGE = '___ready___';
 const OBJECT_CHANGE = 'objectChange';
+const LOG_MESSAGE = 'log';
 const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
 const CLIENT_NAME = 'iobroker-sync';
@@ -65,6 +68,7 @@ export class AdminSocketClient implements SocketClient {
   private idCounter = 0;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly subscriptions = new Map<string, SubscriptionEntry[]>();
+  private readonly logHandlers: LogHandler[] = [];
   private readonly connectTimeoutMs: number;
   private readonly requestTimeoutMs: number;
   private connectPromise: Promise<void> | null = null;
@@ -157,6 +161,13 @@ export class AdminSocketClient implements SocketClient {
             const [objId, obj] = (args as [string, IoBrokerObject | null]) ?? [undefined, undefined];
             if (typeof objId === 'string') {
               this.dispatchObjectChange(objId, obj ?? null);
+            }
+            return;
+          }
+          if (name === LOG_MESSAGE) {
+            const [entry] = (args as [LogMessage | undefined]) ?? [undefined];
+            if (entry && typeof entry.message === 'string') {
+              this.dispatchLog(entry);
             }
           }
         }
@@ -283,6 +294,24 @@ export class AdminSocketClient implements SocketClient {
     await this.emit('unsubscribeObjects', [pattern]);
   }
 
+  /**
+   * Subscribes to the server log stream.
+   *
+   * The wire command is the generic `subscribe` with the literal type `log` — not a
+   * `subscribeLog` of its own. Server-side that flips `requireLog(true)` on the
+   * adapter, after which log lines arrive as ordinary `[0, null, "log", [entry]]`
+   * message frames.
+   */
+  async subscribeLog(handler: LogHandler): Promise<void> {
+    this.logHandlers.push(handler);
+    await this.emit('subscribe', ['log']);
+  }
+
+  async unsubscribeLog(): Promise<void> {
+    this.logHandlers.length = 0;
+    await this.emit('unsubscribe', ['log']);
+  }
+
   private handleCallback(id: number, args: unknown[] | undefined): void {
     const pending = this.pending.get(id);
     if (!pending) {
@@ -298,6 +327,12 @@ export class AdminSocketClient implements SocketClient {
       return;
     }
     pending.resolve(result);
+  }
+
+  private dispatchLog(entry: LogMessage): void {
+    for (const handler of this.logHandlers) {
+      handler(entry);
+    }
   }
 
   private dispatchObjectChange(objId: string, obj: IoBrokerObject | null): void {

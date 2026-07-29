@@ -26,13 +26,13 @@ function validateUrl(url: string): void {
   } catch {
     throw new UserError(
       `Invalid "url" in config: "${url}"`,
-      'Use a full URL including scheme, e.g. "http://192.168.1.13:8081".',
+      'Use a full URL including scheme, e.g. "https://iobroker.local:8081".',
     );
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new UserError(
       `Config "url" must use http or https, got "${parsed.protocol.replace(/:$/, '')}".`,
-      'Use a full URL including scheme, e.g. "http://192.168.1.13:8081".',
+      'Use a full URL including scheme, e.g. "https://iobroker.local:8081".',
     );
   }
 }

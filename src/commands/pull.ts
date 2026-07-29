@@ -44,6 +44,7 @@ async function writeFromRemote(
 
   if (ctx.dryRun) {
     ctx.log.result(`pull  ${status.path} (dry-run)`);
+    ctx.log.data({ type: 'pull', id: status.id, path: status.path, dryRun: true });
     return true;
   }
 
@@ -62,6 +63,7 @@ async function writeFromRemote(
   });
 
   ctx.log.result(`pull  ${status.path}`);
+  ctx.log.data({ type: 'pull', id: status.id, path: status.path, dryRun: false });
   return true;
 }
 

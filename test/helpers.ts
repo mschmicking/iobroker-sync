@@ -31,14 +31,26 @@ export interface CapturedLog {
   result: string[];
   /** Everything, in emission order — handy for "did it mention X at all" assertions. */
   all: string[];
+  /** Machine-readable records, as `--json` would emit them. */
+  data: unknown[];
 }
 
 export function makeCapturingLogger(): { log: Logger; captured: CapturedLog } {
-  const captured: CapturedLog = { info: [], warn: [], error: [], debug: [], result: [], all: [] };
-  const push = (bucket: keyof Omit<CapturedLog, 'all'>) => (msg: string) => {
-    captured[bucket].push(msg);
-    captured.all.push(msg);
+  const captured: CapturedLog = {
+    info: [],
+    warn: [],
+    error: [],
+    debug: [],
+    result: [],
+    all: [],
+    data: [],
   };
+  const push =
+    (bucket: Exclude<keyof CapturedLog, 'all' | 'data'>) =>
+    (msg: string) => {
+      captured[bucket].push(msg);
+      captured.all.push(msg);
+    };
   return {
     captured,
     log: {
@@ -47,6 +59,9 @@ export function makeCapturingLogger(): { log: Logger; captured: CapturedLog } {
       error: push('error'),
       debug: push('debug'),
       result: push('result'),
+      data: (payload: unknown) => {
+        captured.data.push(payload);
+      },
     },
   };
 }

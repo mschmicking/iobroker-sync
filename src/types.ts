@@ -109,7 +109,7 @@ export const MESSAGE_TYPE = {
 } as const;
 
 export interface SocketOptions {
-  /** Admin base URL, e.g. "http://192.168.1.13:8081". */
+  /** Admin base URL, e.g. "https://iobroker.local:8081". */
   url: string;
   /** Cookie header value when the instance requires auth; omitted when auth is disabled. */
   cookie?: string;
@@ -122,6 +122,27 @@ export interface SocketOptions {
 }
 
 export type ObjectChangeHandler = (id: string, obj: IoBrokerObject | null) => void;
+
+/** ioBroker severities, ascending. `silly` exists but is rarely enabled. */
+export const LOG_LEVELS = ['silly', 'debug', 'info', 'warn', 'error'] as const;
+export type LogLevel = (typeof LOG_LEVELS)[number];
+
+/**
+ * One line from the server's log stream.
+ *
+ * `from` is the adapter instance that emitted it (`javascript.2`, `admin.1`, ...);
+ * for a script, the script name appears inside `message`, not in a separate field,
+ * which is why filtering by script is substring matching rather than a lookup.
+ */
+export interface LogMessage {
+  message: string;
+  severity: string;
+  from: string;
+  /** Milliseconds since the epoch. */
+  ts: number;
+}
+
+export type LogHandler = (log: LogMessage) => void;
 
 /**
  * Minimal ioBroker Admin websocket client.
@@ -138,6 +159,9 @@ export interface SocketClient {
   /** Subscribe to object changes matching an ioBroker pattern, e.g. "script.js.*". */
   subscribeObjects(pattern: string, handler: ObjectChangeHandler): Promise<void>;
   unsubscribeObjects(pattern: string): Promise<void>;
+  /** Start receiving the server's log stream. */
+  subscribeLog(handler: LogHandler): Promise<void>;
+  unsubscribeLog(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +288,14 @@ export interface Logger {
   debug(msg: string): void;
   /** Machine-ish result line, e.g. "pull  common/garage.ts". */
   result(msg: string): void;
+  /**
+   * One machine-readable record.
+   *
+   * Silently dropped in human mode; under `--json` it is written to stdout as a
+   * single line of JSON (NDJSON). Commands should call this alongside `result`,
+   * never instead of it, so both audiences are served by one code path.
+   */
+  data(payload: unknown): void;
 }
 
 /** Thrown for expected, user-facing failures. cli.ts prints these without a stack trace. */

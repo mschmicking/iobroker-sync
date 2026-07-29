@@ -58,6 +58,12 @@ export async function status(ctx: CommandContext, opts: StatusOptions): Promise<
     return;
   }
 
+  // Every script, including in-sync ones that the human view collapses to a count:
+  // a consumer filters for itself and should not have to re-run with --verbose.
+  for (const s of statuses) {
+    ctx.log.data({ type: 'status', id: s.id, path: s.path, state: s.state });
+  }
+
   for (const state of GROUP_ORDER) {
     const entries = groups.get(state) ?? [];
     if (entries.length === 0) continue;

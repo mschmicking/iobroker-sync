@@ -145,6 +145,15 @@ export async function backup(
     'utf8',
   );
 
+  // The snapshot path is the one thing a caller needs afterwards, so it leads.
+  ctx.log.data({
+    type: 'backup',
+    snapshot: snapshotDir,
+    createdAt: manifest.createdAt,
+    scripts: entries.length,
+    entries,
+  });
+
   const enabledCount = entries.filter((e) => e.enabled).length;
   ctx.log.info(`Snapshot: ${snapshotDir}`);
   ctx.log.result(

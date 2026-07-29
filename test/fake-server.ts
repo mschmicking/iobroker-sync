@@ -8,10 +8,58 @@
  * `[3, id, command, args]` and are answered with `[3, id, null, [err, result]]`.
  */
 
+import * as fs from 'node:fs';
+import * as http from 'node:http';
+import * as https from 'node:https';
+import * as path from 'node:path';
 import WebSocket from 'ws';
 import { IoBrokerObject } from '../src/types';
 
+/**
+ * Self-signed certificate for the TLS mode, generated with a 20-year lifetime and
+ * committed under `test/fixtures/`. An ioBroker instance with authentication enabled
+ * is normally also on HTTPS with exactly this kind of certificate, so the
+ * `allowSelfSigned` path needs a real TLS handshake to be tested at all.
+ *
+ * Resolved against the source tree because the compiled tests live in `dist-test/`
+ * and the `.pem` files are not copied there.
+ */
+function fixturePath(name: string): string {
+  const candidates = [
+    path.resolve(process.cwd(), 'test', 'fixtures', name),
+    path.resolve(__dirname, 'fixtures', name),
+    path.resolve(__dirname, '..', '..', 'test', 'fixtures', name),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Could not locate test fixture "${name}"`);
+}
+
 type Frame = [number, (number | null)?, string?, unknown?];
+
+/**
+ * How the fake instance answers the HTTP auth probes in `src/client/auth.ts`.
+ *
+ * - `disabled` — `GET /login` 404s, which is how the client detects that no
+ *   authentication is configured. This is the only path real usage has ever taken.
+ * - `oauth` — Admin >= 6 style: `POST /oauth/token` returns an `access_token` cookie.
+ * - `legacy` — older Admin: `POST /login` returns a `connect.sid` session cookie.
+ */
+export type FakeAuthMode = 'disabled' | 'oauth' | 'legacy';
+
+export interface FakeAuthConfig {
+  mode: FakeAuthMode;
+  username: string;
+  password: string;
+}
+
+/** One recorded HTTP request, so tests can assert what the client actually sent. */
+export interface RecordedRequest {
+  method: string;
+  path: string;
+  body: string;
+}
 
 /** Deep-merge `src` into `dest`, mirroring the real server's `extendObject` behaviour. */
 function deepMerge(dest: Record<string, unknown>, src: Record<string, unknown>): Record<string, unknown> {
@@ -41,11 +89,24 @@ function matchPattern(pattern: string, id: string): boolean {
 
 export class FakeAdminServer {
   private wss: WebSocket.Server | null = null;
+  private httpServer: http.Server | null = null;
   private readonly sockets = new Set<WebSocket>();
   private readonly objects = new Map<string, IoBrokerObject>();
   private readonly failCommands = new Map<string, string>();
   private readonly delayedCommands = new Map<string, number>();
   private corruptNextSetObjectFn: ((obj: IoBrokerObject) => IoBrokerObject) | null = null;
+
+  /**
+   * Authentication behaviour of the HTTP side. Defaults to `disabled`, so every
+   * existing test keeps the auth-free behaviour it was written against.
+   */
+  auth: FakeAuthConfig = { mode: 'disabled', username: 'admin', password: 'secret' };
+
+  /** Every HTTP request received, in order. */
+  readonly httpRequests: RecordedRequest[] = [];
+
+  /** Generic `subscribe`/`unsubscribe` calls, e.g. `subscribe:log`. */
+  readonly subscriptionRequests: string[] = [];
 
   /** Delay before sending `___ready___` after connect, in ms. */
   readyDelayMs = 0;
@@ -53,17 +114,41 @@ export class FakeAdminServer {
   pongReceived = false;
 
   /** Binds `port` (default 0 = random free port) and resolves with the bound port. */
-  start(port = 0): Promise<number> {
+  /**
+   * Binds `port` (0 = random free port) and resolves with it. With `tls: true` the
+   * server speaks HTTPS using the committed self-signed certificate, which is what
+   * an auth-enabled ioBroker instance normally looks like.
+   */
+  start(port = 0, opts: { tls?: boolean } = {}): Promise<number> {
     return new Promise((resolve, reject) => {
-      const wss = new WebSocket.Server({ port }, () => {
-        const address = wss.address();
+      // One server for both protocols, as real Admin does on 8081: the auth probes
+      // in src/client/auth.ts hit the same origin the websocket later connects to.
+      const handler = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+        void this.handleHttp(req, res);
+      };
+
+      const httpServer = opts.tls
+        ? https.createServer(
+            {
+              key: fs.readFileSync(fixturePath('self-signed-key.pem')),
+              cert: fs.readFileSync(fixturePath('self-signed-cert.pem')),
+            },
+            handler,
+          )
+        : http.createServer(handler);
+      this.httpServer = httpServer;
+
+      const wss = new WebSocket.Server({ server: httpServer });
+      this.wss = wss;
+
+      httpServer.listen(port, () => {
+        const address = httpServer.address();
         if (typeof address === 'string' || address === null) {
           reject(new Error('Unexpected server address'));
           return;
         }
         resolve(address.port);
       });
-      this.wss = wss;
 
       wss.on('connection', (ws: WebSocket) => {
         this.sockets.add(ws);
@@ -89,13 +174,15 @@ export class FakeAdminServer {
       });
 
       wss.on('error', reject);
+      httpServer.on('error', reject);
     });
   }
 
   stop(): Promise<void> {
     return new Promise((resolve, reject) => {
       const wss = this.wss;
-      if (!wss) {
+      const httpServer = this.httpServer;
+      if (!wss || !httpServer) {
         resolve();
         return;
       }
@@ -103,15 +190,82 @@ export class FakeAdminServer {
         ws.terminate();
       }
       this.sockets.clear();
-      wss.close((err) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        this.wss = null;
-        resolve();
+      wss.close(() => {
+        httpServer.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          this.wss = null;
+          this.httpServer = null;
+          resolve();
+        });
       });
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // HTTP side — only what src/client/auth.ts probes
+  // -------------------------------------------------------------------------
+
+  private async handleHttp(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    const body = Buffer.concat(chunks).toString('utf8');
+    const urlPath = (req.url ?? '/').split('?')[0];
+
+    this.httpRequests.push({ method: req.method ?? 'GET', path: urlPath, body });
+
+    const { mode, username, password } = this.auth;
+    const credentialsMatch = (raw: string): boolean => {
+      const form = new URLSearchParams(raw);
+      return form.get('username') === username && form.get('password') === password;
+    };
+
+    if (req.method === 'GET' && urlPath === '/login') {
+      // A 404 here is precisely how the client concludes "auth is disabled".
+      if (mode === 'disabled') {
+        res.writeHead(404).end('not found');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html' }).end('<html>login</html>');
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && urlPath === '/oauth/token') {
+      if (mode !== 'oauth') {
+        res.writeHead(404).end('not found');
+        return;
+      }
+      if (!credentialsMatch(body)) {
+        res.writeHead(401).end('bad credentials');
+        return;
+      }
+      res
+        .writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie': 'access_token=fake-oauth-token; Path=/; HttpOnly',
+        })
+        .end(JSON.stringify({ access_token: 'fake-oauth-token', token_type: 'Bearer' }));
+      return;
+    }
+
+    if (req.method === 'POST' && urlPath === '/login') {
+      if (mode !== 'legacy' || !credentialsMatch(body)) {
+        // No cookie: the client must treat this as a failed login, not a success.
+        res.writeHead(401).end('bad credentials');
+        return;
+      }
+      res
+        .writeHead(302, {
+          Location: '/',
+          'Set-Cookie': 'connect.sid=fake-session-id; Path=/; HttpOnly',
+        })
+        .end();
+      return;
+    }
+
+    res.writeHead(404).end('not found');
   }
 
   /** Forcefully terminate all active client connections without stopping the server. */
@@ -147,6 +301,9 @@ export class FakeAdminServer {
     this.corruptNextSetObjectFn = null;
     this.failCommands.clear();
     this.delayedCommands.clear();
+    this.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
+    this.httpRequests.length = 0;
+    this.subscriptionRequests.length = 0;
   }
 
   getObject(id: string): IoBrokerObject | null {
@@ -158,6 +315,29 @@ export class FakeAdminServer {
   }
 
   /** Broadcast an objectChange message to all connected clients (bypassing storage). */
+  /**
+   * Pushes a log line to every connected client, as the real server does after a
+   * `subscribe(['log'])`. Shape mirrors ioBroker's log objects.
+   */
+  emitLog(entry: {
+    message: string;
+    severity?: string;
+    from?: string;
+    ts?: number;
+  }): void {
+    const payload = {
+      message: entry.message,
+      severity: entry.severity ?? 'info',
+      from: entry.from ?? 'javascript.0',
+      ts: entry.ts ?? Date.now(),
+    };
+    for (const ws of this.sockets) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify([0, null, 'log', [payload]]));
+      }
+    }
+  }
+
   emitObjectChange(id: string, obj: IoBrokerObject | null): void {
     const frame = JSON.stringify([0, null, 'objectChange', [id, obj]]);
     for (const ws of this.sockets) {
@@ -297,6 +477,16 @@ export class FakeAdminServer {
         // No server-side subscription bookkeeping needed for the fake: object
         // changes are broadcast to every connection, and the real client
         // filters locally by pattern.
+        this.reply(ws, id, null, null);
+        return;
+      }
+
+      case 'subscribe':
+      case 'unsubscribe': {
+        // The generic subscribe, used with the literal type 'log'. Recorded so a
+        // test can assert the client asked for logs before expecting any.
+        const [what] = (args as string[]) ?? [];
+        this.subscriptionRequests.push(`${name}:${what}`);
         this.reply(ws, id, null, null);
         return;
       }

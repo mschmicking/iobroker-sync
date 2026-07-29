@@ -28,6 +28,23 @@ import { matchesPattern } from '../sync/scan';
 export interface WatchOptions {
   pattern?: string;
   pull?: boolean;
+  /**
+   * Debounce window for local file events. Only set by tests, which would
+   * otherwise have to sleep past the 300 ms default for every assertion.
+   */
+  debounceMs?: number;
+}
+
+/**
+ * A running watch. `watch()` returns once everything is subscribed rather than
+ * blocking until Ctrl+C: waiting for a signal is a CLI concern (see `cli.ts`),
+ * and a watch that could only be stopped by a signal was untestable — which
+ * mattered, because the echo-suppression logic below is what stands between a
+ * bug and an infinite push loop against a live house.
+ */
+export interface WatchHandle {
+  /** Stops watching and releases the watcher and subscription. Idempotent. */
+  stop(): Promise<void>;
 }
 
 const DEBOUNCE_MS = 300;
@@ -43,8 +60,9 @@ function matches(value: string, id: string, pattern?: string): boolean {
   return matchesPattern(value, pattern) || matchesPattern(id, pattern);
 }
 
-export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<void> {
+export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<WatchHandle> {
   const manifest = await loadManifest(ctx.root);
+  const debounceMs = opts.debounceMs ?? DEBOUNCE_MS;
 
   /** Hash of the source we last successfully pushed for a given id (echo suppression). */
   const lastPushedHash = new Map<string, string>();
@@ -100,6 +118,12 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<vo
       return;
     }
 
+    // Recorded *before* the write, not after: the adapter's echo can arrive while
+    // extendScript is still in flight, and a hash set afterwards would miss it. A
+    // failed push then leaves one stale entry, which at worst suppresses a single
+    // remote change carrying exactly this source — far cheaper than a spurious pull.
+    lastPushedHash.set(id, localHash);
+
     try {
       if (remoteScript) {
         await ctx.objects.extendScript(id, { source: localSource, engineType });
@@ -125,8 +149,6 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<vo
       ctx.log.error(`${relPath}: push failed: ${(err as Error).message}`);
       return;
     }
-
-    lastPushedHash.set(id, localHash);
 
     upsertEntry(manifest, {
       id,
@@ -154,7 +176,7 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<vo
       setTimeout(() => {
         debounceTimers.delete(relPath);
         pushFile(relPath).catch((err) => ctx.log.error(`${relPath}: ${(err as Error).message}`));
-      }, DEBOUNCE_MS),
+      }, debounceMs),
     );
   }
 
@@ -230,6 +252,14 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<vo
   watcher.on('change', scheduleFile);
   watcher.on('error', (err) => ctx.log.error(`watcher error: ${(err as Error).message}`));
 
+  // chokidar only starts reporting events once its initial scan completes. Returning
+  // before that (and telling the user we are watching) silently drops any edit saved
+  // in the gap, which on a large script root is not a small window.
+  await new Promise<void>((resolve, reject) => {
+    watcher.once('ready', resolve);
+    watcher.once('error', reject);
+  });
+
   let subscribed = false;
   if (opts.pull) {
     await ctx.socket.subscribeObjects(SCRIPT_PATTERN, (id, obj) => {
@@ -239,42 +269,32 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<vo
   }
 
   ctx.log.info(`Watching "${ctx.scriptRoot}" for changes${opts.pull ? ' (pulling remote changes too)' : ''}.`);
-  ctx.log.info('Press Ctrl+C to stop.');
 
-  await new Promise<void>((resolve) => {
-    const onSigint = (): void => {
-      process.off('SIGINT', onSigint);
-      ctx.log.info('Stopping watch...');
+  let stopped = false;
+  async function stop(): Promise<void> {
+    if (stopped) return;
+    stopped = true;
 
-      void (async () => {
-        for (const timer of debounceTimers.values()) clearTimeout(timer);
-        debounceTimers.clear();
+    for (const timer of debounceTimers.values()) clearTimeout(timer);
+    debounceTimers.clear();
 
-        try {
-          await watcher.close();
-        } catch {
-          // ignore
-        }
+    try {
+      await watcher.close();
+    } catch {
+      // ignore
+    }
 
-        if (subscribed) {
-          try {
-            await ctx.socket.unsubscribeObjects(SCRIPT_PATTERN);
-          } catch {
-            // ignore
-          }
-        }
+    if (subscribed) {
+      try {
+        await ctx.socket.unsubscribeObjects(SCRIPT_PATTERN);
+      } catch {
+        // ignore
+      }
+    }
 
-        try {
-          await ctx.socket.close();
-        } catch {
-          // ignore
-        }
+    // The socket itself is closed by whoever built the context (`withContext`
+    // in cli.ts), so it is deliberately left alone here.
+  }
 
-        resolve();
-        process.exit(0);
-      })();
-    };
-
-    process.on('SIGINT', onSigint);
-  });
+  return { stop };
 }

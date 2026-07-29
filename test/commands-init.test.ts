@@ -14,6 +14,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { runInit } from '../src/commands/init';
+import { UserError } from '../src/types';
 import { makeCapturingLogger, makeTempProject } from './helpers';
 
 /** A stand-in for a real build config: owns rootDir/outDir, must survive untouched. */
@@ -106,6 +107,99 @@ describe('init --types', () => {
       assert.ok(
         captured.warn.some((m) => m.includes('already exists')),
         'expected a warning that the existing config was kept',
+      );
+    } finally {
+      await project.cleanup();
+    }
+  });
+});
+
+describe('init config and secrets', () => {
+  it('never writes a password into the project config', async () => {
+    const project = await makeTempProject();
+    const previous = process.env.IOBROKER_PASSWORD;
+    process.env.IOBROKER_PASSWORD = 'sup3r-s3cret-passphrase';
+    try {
+      const { log } = makeCapturingLogger();
+      await runInit(
+        project.root,
+        { url: DEAD_URL, username: 'admin', interactive: false },
+        log,
+      );
+
+      // The config lives in the user's git repo. The username belongs there; the
+      // password belongs in the 0600 store outside it (see src/credentials.ts).
+      const raw = await fs.readFile(path.join(project.root, '.iobroker-sync.json'), 'utf8');
+      assert.doesNotMatch(raw, /sup3r-s3cret-passphrase/);
+      assert.doesNotMatch(raw, /password/i);
+      assert.match(raw, /"username": "admin"/);
+    } finally {
+      if (previous === undefined) delete process.env.IOBROKER_PASSWORD;
+      else process.env.IOBROKER_PASSWORD = previous;
+      await project.cleanup();
+    }
+  });
+
+  it('records allowSelfSigned so an https instance can be reached at all', async () => {
+    const project = await makeTempProject();
+    try {
+      const { log } = makeCapturingLogger();
+      await runInit(
+        project.root,
+        { url: 'https://iobroker.example:8081', allowSelfSigned: true, interactive: false },
+        log,
+      );
+
+      const raw = await fs.readFile(path.join(project.root, '.iobroker-sync.json'), 'utf8');
+      assert.match(raw, /"allowSelfSigned": true/);
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('gitignores the state directory, which holds backup snapshots of live scripts', async () => {
+    const project = await makeTempProject();
+    try {
+      await fs.writeFile(path.join(project.root, '.gitignore'), 'node_modules/\n', 'utf8');
+
+      const { log } = makeCapturingLogger();
+      await runInit(project.root, { url: DEAD_URL, interactive: false }, log);
+
+      const gitignore = await fs.readFile(path.join(project.root, '.gitignore'), 'utf8');
+      assert.match(gitignore, /^\.iobroker-sync\/$/m);
+      assert.match(gitignore, /node_modules\//, 'existing entries must survive');
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('does not duplicate an existing gitignore entry', async () => {
+    const project = await makeTempProject();
+    try {
+      await fs.writeFile(path.join(project.root, '.gitignore'), '.iobroker-sync/\n', 'utf8');
+
+      const { log } = makeCapturingLogger();
+      await runInit(project.root, { url: DEAD_URL, interactive: false }, log);
+
+      const gitignore = await fs.readFile(path.join(project.root, '.gitignore'), 'utf8');
+      const occurrences = gitignore.split('\n').filter((l) => l.trim() === '.iobroker-sync/').length;
+      assert.equal(occurrences, 1);
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('fails with a usable message when there is no url and no terminal', async () => {
+    const project = await makeTempProject();
+    try {
+      const { log } = makeCapturingLogger();
+      await assert.rejects(
+        () => runInit(project.root, { interactive: false }, log),
+        (err: unknown) => {
+          assert.ok(err instanceof UserError);
+          assert.match(err.message, /no --url/i);
+          return true;
+        },
       );
     } finally {
       await project.cleanup();
