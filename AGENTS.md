@@ -74,6 +74,20 @@ Requests are `[3, id, command, args]`; the reply reuses the id with `args = [err
 Scripts are `script.js.<folder>.<name>` (`type: "script"`); folders are `type: "channel"`.
 Folder `common.name` may be a **multilingual object**, not a string — use `resolveName()`.
 
+### Log streaming (verified against live Admin 7.x)
+
+Subscribing uses the **generic `subscribe` command with the literal type `log`** — there
+is no `subscribeLog` on the wire. Server-side that flips `requireLog(true)`, after which
+lines arrive as ordinary message frames `[0, null, "log", [entry]]` where `entry` is
+`{ message, severity, from, ts }`.
+
+**A script's identity is inside `message`, not a field.** A real line looks like
+`javascript.2 (200) script.js.Rollos.astroControl: ...`, so filtering by script is
+substring matching over `message` + `from`. There is nothing else to match on.
+
+Unknown severities are shown, never hidden — treating an unrecognised level as
+below-threshold could swallow the very error the user is looking for.
+
 `common.sourceHash` and `common.compiled` are adapter-managed. Never write them: the
 javascript adapter recomputes the hash from `source` and only reuses `compiled` on a
 hash match, so leaving them stale is safe and forces a correct recompile.
@@ -85,7 +99,16 @@ infinite-loops on connection errors against this server.
 
 - TypeScript, CommonJS output, `strict: true`. `npx tsc -p tsconfig.json --noEmit`
   must be clean before you call anything done.
-- Commands never call `console.*` — use `ctx.log` (`info`/`warn`/`error`/`debug`/`result`).
+- Commands never call `console.*` — use `ctx.log`
+  (`info`/`warn`/`error`/`debug`/`result`/`data`).
+- **`data()` accompanies `result()`, never replaces it.** One code path serves both
+  audiences; a command that emits only one of them is broken for the other. Records
+  carry underlying values (booleans, full ids), not the display strings, and each has
+  a `type` discriminator.
+- Under `--json`, stdout is **NDJSON only** — `info`/`result` are suppressed and
+  `warn`/`error` go to stderr, so stdout stays parseable even on failure. NDJSON rather
+  than one accumulated array because `logs` and `watch` are unbounded: an array could
+  never be closed, and nothing would appear until exit.
 - User-facing failures are `UserError` (message + optional hint); `cli.ts` prints them
   without a stack trace and sets exit code 1.
 - Comments explain *why*, not *what*. The non-obvious protocol and safety reasoning is
@@ -103,13 +126,27 @@ npm run test:unit  # pure-logic tests only
 
 ## Test coverage
 
-128 tests, all against `test/fake-server.ts` — no test may touch a real instance.
+All tests run against `test/fake-server.ts` — **no test may touch a real instance.**
+(Deliberately not stating a test count here: it went stale five times in a single
+session. `node --test` reports the number.)
 
-Directly tested: `client/socket`, `client/objects`, `sync/compare`, `sync/mapping`,
-`sync/safe-path` (path traversal, symlink-file writes, symlinked-directory writes),
-and the commands `pull`, `push`, `status`, `list`, `start`, `stop`, `restart`, `new`,
-`rename`, `move`, `remove`. `sync/manifest` and `sync/scan` are covered indirectly by
-every pull/push test.
+Directly tested: `client/socket`, `client/objects`, `client/auth` (HTTP and HTTPS),
+`config`, `credentials`, `sync/compare`, `sync/mapping`, `sync/safe-path` (path
+traversal, symlink-file writes, symlinked-directory writes), the `--json` record shapes,
+and the commands `pull`, `push`, `status`, `diff` (including `--against`), `watch`,
+`logs`, `list`, `start`, `stop`, `restart`, `new`, `rename`, `move`, `remove`, `backup`.
+`sync/manifest` and `sync/scan` are covered indirectly by every pull/push test.
+
+`test/cli.test.ts` spawns the built `dist/cli.js` and asserts on real argv handling.
+It exists because a duplicate `--password-stdin` declaration — global *and* on the
+`login` subcommand — was silently shadowed by commander, and no in-process test could
+see it. **Anything about option wiring, exit codes or stdout/stderr separation belongs
+there, and it needs `dist/` built first.**
+
+`test/fake-server.ts` serves HTTP and websocket on one port, as real Admin does on 8081.
+Its `auth` field selects how the HTTP side answers the probes in `client/auth.ts`
+(`disabled` → `GET /login` 404s, `oauth` → `POST /oauth/token`, `legacy` → `POST /login`);
+`reset()` returns it to `disabled`, so tests that do not care are unaffected.
 
 `pull` also skips-and-continues per script rather than aborting the whole run: one
 unwritable script (a bad id, a symlink in the way) is reported and the rest still
@@ -118,15 +155,58 @@ pulls the rest" in `test/commands-sync.test.ts`.
 
 **Not directly tested** — treat as unverified and add coverage when you touch them:
 
-- `commands/watch.ts` — only manually smoke-tested. The echo-suppression logic
-  (ignoring the adapter's `compiled`/`sourceHash` write-back) is subtle and a
-  regression there means an infinite push loop.
-- `commands/diff.ts` — manually exercised against a live instance only.
-- `commands/init.ts` — the tsconfig scaffolding is covered by
-  `test/commands-init.test.ts`; `probeConnection` and the `javascript.d.ts`
-  download are not.
-- `config.ts`, `cli.ts`, `client/auth.ts` — the auth-disabled fast path is the only
-  one ever run; the OAuth2 and legacy login paths have never executed.
+- `commands/init.ts` — the tsconfig scaffolding, gitignore handling and config writing
+  are covered; `probeConnection` and the `javascript.d.ts` download are not.
+- The **interactive prompts** in `prompt.ts` are never exercised: tests run without a
+  TTY, which is exactly the guard being relied on. Verified by hand only.
+- The **SIGINT path** in `cli.ts` (`untilSigint`) is exercised by hand only; `watch`
+  and `logs` are tested through their `stop()` handles instead.
+- The **legacy `/login` fallback** passes against the fake server but has never run
+  against real hardware — current Admin authenticates via OAuth2.
+- `client/auth.ts` is covered against the fake server over both HTTP and HTTPS,
+  but **no login path has yet run against a real authenticated instance.**
+
+## Passwords
+
+The password must never reach the project directory, argv, or a log line:
+
+- `.iobroker-sync.json` holds the **username only**. It lives in the user's git repo.
+- There is deliberately **no `--password <value>` flag** — argv is readable by any
+  local process via `ps` and is kept in shell history. Only `--password-stdin`,
+  `IOBROKER_PASSWORD`, the saved store, or a hidden prompt.
+- `src/credentials.ts` stores passwords at `~/.config/iobroker-sync/credentials.json`
+  (override with `IOBROKER_SYNC_CREDENTIALS`, which every test does so the suite never
+  reads the developer's real store), mode `0600` in a `0700` directory, written
+  temp-then-rename so an interrupted write cannot truncate it.
+- `iob-sync login` verifies a password against the live instance *before* saving, so a
+  typo fails now rather than on the next command.
+- Prompts require stdin **and** stdout to be TTYs, so a script, CI job or agent gets a
+  `UserError` instead of a hang.
+
+### Auth requires TLS, and TLS here is self-signed
+
+Admin will not accept a password over plain HTTP, so any instance with authentication
+enabled is also on HTTPS — usually with a self-signed certificate. `allowSelfSigned`
+used to be honoured only on the websocket; the HTTP login path used global `fetch`,
+which cannot accept an untrusted certificate without an `undici` Agent, so login died
+at the handshake before sending anything. `client/auth.ts` therefore uses `node:https`
+directly rather than `fetch`. `test/fixtures/` holds a committed throwaway certificate
+so this path is tested against a real handshake.
+
+### Two bugs the watch tests caught
+
+Both were live in working code, and both are the kind that only show up under a test
+that can actually drive the watcher:
+
+1. `watch()` returned before chokidar finished its initial scan, so any edit saved in
+   that window was silently dropped. It now awaits the `ready` event.
+2. `lastPushedHash` was recorded *after* the server write completed, so an adapter
+   echo arriving mid-flight escaped the echo guard and produced a spurious pull. The
+   hash is now recorded before the write.
+
+`watch()` returns a `WatchHandle` with `stop()` rather than blocking until SIGINT —
+signal handling lives in `cli.ts`. That is what makes the echo-suppression logic
+testable at all, which matters given a regression there means an infinite push loop.
 
 ## Other known gaps
 
@@ -153,8 +233,7 @@ collisions.
 
 ### This repo holds no scripts
 
-The CLI is a tool; the scripts it syncs live in their own repository
-(`mschmicking/iobroker-scripts`), along with their tests and a per-file typecheck
-runner. Do not add a `scripts/` directory here — running `iob-sync init` inside this
-repo is what caused the `tsconfig.json` breakage above. Test commands against
-`test/fake-server.ts` and temporary project directories instead.
+The CLI is a tool; the scripts it syncs belong in their own repository. Do not add a
+`scripts/` directory here — running `iob-sync init` inside this repo is what caused the
+`tsconfig.json` breakage above. Test commands against `test/fake-server.ts` and
+temporary project directories instead.
