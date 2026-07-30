@@ -42,8 +42,11 @@ jobs:
             deps
             docs
           requireScope: false
-          # Subject should read like a sentence fragment, lower-case, no full stop.
-          subjectPattern: ^(?![A-Z])(?!.*\.$).+$
+          # Only the trailing full stop is rejected. A lower-case rule was tried and
+          # removed: Dependabot capitalises some of its titles ("Bump x from 1 to 2")
+          # and not others, so it failed dependency PRs for a reason unrelated to
+          # anything a human chose.
+          subjectPattern: ^(?!.*\.$).+$
           subjectPatternError: |
-            The subject "{subject}" is invalid: start lower-case and omit the trailing
-            full stop, e.g. "feat(logs): stream the server log".
+            The subject "{subject}" must not end with a full stop, e.g.
+            "feat(logs): stream the server log".

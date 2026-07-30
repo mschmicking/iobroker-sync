@@ -16,6 +16,12 @@ updates:
       # and a bump is never interesting on its own.
       dev-tooling:
         dependency-type: development
+        # Minor and patch only. Grouped majors produced an internally inconsistent
+        # PR — typescript 5 -> 7 alongside typescript-eslint 8, which does not
+        # support it — that could never install, let alone pass.
+        update-types:
+          - minor
+          - patch
         patterns:
           - '@typescript-eslint/*'
           - 'typescript-eslint'
@@ -24,11 +30,24 @@ updates:
           - 'typescript'
           - '@types/*'
     ignore:
-      # Majors reach a user's machine and can change runtime behaviour against a
-      # live instance; review those deliberately rather than as a routine PR.
+      # Every runtime dependency: a major reaches a user's machine and can change
+      # behaviour against a live instance, so it deserves a deliberate look rather
+      # than a routine PR that sits there red.
       - dependency-name: 'ws'
         update-types: ['version-update:semver-major']
       - dependency-name: 'chokidar'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'commander'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'diff'
+        update-types: ['version-update:semver-major']
+      # Toolchain majors are migrations, not bumps. TypeScript 7 in particular is a
+      # different compiler; typescript-eslint has to support it first.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
