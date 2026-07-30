@@ -1,0 +1,72 @@
+name: Release to npm
+
+# Manual only. There is no push/tag trigger on purpose: publishing is
+# irreversible (npm forbids re-using a version number, and unpublishing is
+# restricted), so it should never happen as a side effect of a commit.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Pack and validate without publishing'
+        type: boolean
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for npm provenance, which attests that this tarball was built
+      # from this commit in this repository. Only works on a public repository.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -p tsconfig.json --noEmit
+
+      - name: Test
+        run: npm test
+
+      - name: Refuse to publish a version that already exists
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Preparing $NAME@$VERSION"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$NAME@$VERSION is already published. Bump the version first."
+            exit 1
+          fi
+
+      - name: Check the README makes no false promises
+        run: |
+          if grep -q 'Not released yet' README.md; then
+            echo "::error::README still carries the pre-release note. Remove it before publishing."
+            exit 1
+          fi
+
+      - name: Pack (dry run)
+        if: inputs.dry_run
+        run: npm publish --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag the released commit
+        if: ${{ !inputs.dry_run }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
