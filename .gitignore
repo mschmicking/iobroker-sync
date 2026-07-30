@@ -12,3 +12,6 @@ dist-test/
 .iobroker/
 
 *.log
+
+# TLS test certificate, generated on first test run (never committed)
+test/fixtures/*.pem

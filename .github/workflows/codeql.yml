@@ -1,0 +1,33 @@
+name: CodeQL
+
+# GitHub's own static analysis. Free on public repositories; on a private repo it
+# requires GitHub Advanced Security, so this will simply not run until the
+# repository is public.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Rules are updated continuously, so a weekly run finds things that did not
+    # exist as findings when the code was written.
+    - cron: '0 7 * * 1'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-extended adds lower-severity rules; worth it for a tool that
+          # handles credentials and writes files from server-controlled ids.
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@v3

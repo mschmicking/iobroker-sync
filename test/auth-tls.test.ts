@@ -16,14 +16,16 @@ import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 
-import { FakeAdminServer } from './fake-server';
+import { FakeAdminServer, tlsFixtureAvailable } from './fake-server';
 import { getAuthCookie } from '../src/client/auth';
 import { UserError } from '../src/types';
 import { TempProject, makeTempProject } from './helpers';
 
 const NO_PROMPT = { allowPrompt: false } as const;
 
-describe('getAuthCookie over https with a self-signed certificate', () => {
+// openssl generates the certificate on first run; without it these are skipped
+// rather than failing, so a contributor without openssl still gets a green suite.
+describe('getAuthCookie over https with a self-signed certificate', { skip: tlsFixtureAvailable() ? false : 'openssl not available' }, () => {
   let server: FakeAdminServer;
   let url: string;
   let project: TempProject;

@@ -8,6 +8,7 @@
  * `[3, id, command, args]` and are answered with `[3, id, null, [err, result]]`.
  */
 
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as https from 'node:https';
@@ -16,24 +17,68 @@ import WebSocket from 'ws';
 import { IoBrokerObject } from '../src/types';
 
 /**
- * Self-signed certificate for the TLS mode, generated with a 20-year lifetime and
- * committed under `test/fixtures/`. An ioBroker instance with authentication enabled
- * is normally also on HTTPS with exactly this kind of certificate, so the
- * `allowSelfSigned` path needs a real TLS handshake to be tested at all.
+ * Self-signed certificate for the TLS mode.
  *
- * Resolved against the source tree because the compiled tests live in `dist-test/`
- * and the `.pem` files are not copied there.
+ * An ioBroker instance with authentication enabled is normally also on HTTPS with
+ * exactly this kind of certificate, so the `allowSelfSigned` path needs a real TLS
+ * handshake to be tested at all.
+ *
+ * The pair is **generated on first use and cached** in `test/fixtures/`, not committed.
+ * Committing a private key — even a worthless one for localhost — means every future
+ * secret scanner flags the repository forever. Generating it per run would be slower,
+ * so it is written once and reused; the files are gitignored.
+ *
+ * Resolved against the source tree because the compiled tests live in `dist-test/`.
  */
-function fixturePath(name: string): string {
-  const candidates = [
-    path.resolve(process.cwd(), 'test', 'fixtures', name),
-    path.resolve(__dirname, 'fixtures', name),
-    path.resolve(__dirname, '..', '..', 'test', 'fixtures', name),
-  ];
-  for (const candidate of candidates) {
+function fixturesDir(): string {
+  for (const candidate of [
+    path.resolve(process.cwd(), 'test', 'fixtures'),
+    path.resolve(__dirname, 'fixtures'),
+    path.resolve(__dirname, '..', '..', 'test', 'fixtures'),
+  ]) {
     if (fs.existsSync(candidate)) return candidate;
   }
-  throw new Error(`Could not locate test fixture "${name}"`);
+  return path.resolve(process.cwd(), 'test', 'fixtures');
+}
+
+/** True when a TLS fixture can be produced, i.e. `openssl` is on PATH. */
+export function tlsFixtureAvailable(): boolean {
+  return ensureTlsFixture() !== null;
+}
+
+let cachedFixture: { key: Buffer; cert: Buffer } | null | undefined;
+
+function ensureTlsFixture(): { key: Buffer; cert: Buffer } | null {
+  if (cachedFixture !== undefined) return cachedFixture;
+
+  const dir = fixturesDir();
+  const keyPath = path.join(dir, 'self-signed-key.pem');
+  const certPath = path.join(dir, 'self-signed-cert.pem');
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      execFileSync(
+        'openssl',
+        [
+          'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+          '-days', '7300',
+          '-subj', '/CN=localhost',
+          '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+          '-keyout', keyPath,
+          '-out', certPath,
+        ],
+        { stdio: 'ignore' },
+      );
+    } catch {
+      // No openssl. The TLS suite skips rather than failing the whole run.
+      cachedFixture = null;
+      return cachedFixture;
+    }
+  }
+
+  cachedFixture = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+  return cachedFixture;
 }
 
 type Frame = [number, (number | null)?, string?, unknown?];
@@ -113,10 +158,9 @@ export class FakeAdminServer {
   /** Set to true once a client has replied `[2]` to a server-initiated `[1]` ping. */
   pongReceived = false;
 
-  /** Binds `port` (default 0 = random free port) and resolves with the bound port. */
   /**
    * Binds `port` (0 = random free port) and resolves with it. With `tls: true` the
-   * server speaks HTTPS using the committed self-signed certificate, which is what
+   * server speaks HTTPS using a locally generated self-signed certificate, which is what
    * an auth-enabled ioBroker instance normally looks like.
    */
   start(port = 0, opts: { tls?: boolean } = {}): Promise<number> {
@@ -127,15 +171,17 @@ export class FakeAdminServer {
         void this.handleHttp(req, res);
       };
 
-      const httpServer = opts.tls
-        ? https.createServer(
-            {
-              key: fs.readFileSync(fixturePath('self-signed-key.pem')),
-              cert: fs.readFileSync(fixturePath('self-signed-cert.pem')),
-            },
-            handler,
-          )
-        : http.createServer(handler);
+      let httpServer: http.Server;
+      if (opts.tls) {
+        const fixture = ensureTlsFixture();
+        if (!fixture) {
+          reject(new Error('TLS mode needs openssl on PATH to generate a test certificate.'));
+          return;
+        }
+        httpServer = https.createServer({ key: fixture.key, cert: fixture.cert }, handler);
+      } else {
+        httpServer = http.createServer(handler);
+      }
       this.httpServer = httpServer;
 
       const wss = new WebSocket.Server({ server: httpServer });

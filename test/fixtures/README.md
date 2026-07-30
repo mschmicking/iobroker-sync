@@ -1,28 +1,21 @@
 # Test fixtures
 
-## `self-signed-cert.pem` / `self-signed-key.pem`
+## TLS certificate — generated, not committed
 
-A throwaway self-signed certificate for `localhost` / `127.0.0.1`, valid until 2046,
-used by `test/auth-tls.test.ts` to start the fake Admin server over HTTPS.
+`test/auth-tls.test.ts` needs a real TLS handshake, because an ioBroker instance with
+authentication enabled is normally also on HTTPS with a self-signed certificate, and
+`allowSelfSigned` cannot be exercised against a mock.
 
-**This key is deliberately committed and has no security value.** It protects nothing,
-is generated for this repository only, and is never used outside an in-process test
-server bound to a random loopback port.
+`test/fake-server.ts` generates `self-signed-key.pem` / `self-signed-cert.pem` here on
+first use and reuses them afterwards. Both are gitignored.
 
-It exists because an ioBroker instance with authentication enabled is normally also on
-HTTPS with a self-signed certificate — Admin will not take a password over plain HTTP.
-Testing the `allowSelfSigned` path therefore needs a real TLS handshake, not a mock.
+**Why generated rather than committed:** a committed private key — even a worthless one
+scoped to localhost — is flagged by every secret scanner, forever, and the false positive
+has to be re-triaged on each new scan. Generating costs roughly 150 ms once; the cached
+pair then makes every later run exactly as fast as a committed fixture would be.
 
-Regenerate with:
+Requires `openssl` on PATH. Without it the TLS suite **skips** rather than fails, so a
+contributor who lacks it still gets a green run — at the cost of not covering the HTTPS
+login path.
 
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes -days 7300 \
-  -subj "/CN=localhost" \
-  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
-  -keyout self-signed-key.pem -out self-signed-cert.pem
-```
-
-> **Before making this repository public:** GitHub secret scanning flags committed
-> private keys, even harmless ones. Either accept the alert and dismiss it as a test
-> fixture, or switch to generating the pair at test-setup time (CI runners have
-> `openssl`).
+To force a fresh pair, delete the two `.pem` files and run the tests again.
