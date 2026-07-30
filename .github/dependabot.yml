@@ -49,6 +49,13 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@eslint/js'
         update-types: ['version-update:semver-major']
+      # @types/node must track the OLDEST supported runtime, not the newest.
+      # engines is ">=22", so types from Node 26 would let tsc accept APIs that do
+      # not exist on Node 22 — code that typechecks here and throws on a user's
+      # machine. CI only catches that if a test happens to exercise the call.
+      # Raise this deliberately, together with the engines floor.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
