@@ -26,10 +26,7 @@ import { ScriptObject, UserError } from '../src/types';
 
 const SOURCE = "on('x', () => log('y'));\n";
 
-function script(
-  id: string,
-  overrides: Partial<ScriptObject['common']> = {},
-): ScriptObject {
+function script(id: string, overrides: Partial<ScriptObject['common']> = {}): ScriptObject {
   return {
     _id: id,
     type: 'script',

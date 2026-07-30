@@ -39,10 +39,7 @@ function parseLevel(level: string | undefined): LogLevel {
   if (!level) return 'info';
   const normalized = level.toLowerCase() as LogLevel;
   if (!LOG_LEVELS.includes(normalized)) {
-    throw new UserError(
-      `Unknown log level "${level}".`,
-      `Use one of: ${LOG_LEVELS.join(', ')}.`,
-    );
+    throw new UserError(`Unknown log level "${level}".`, `Use one of: ${LOG_LEVELS.join(', ')}.`);
   }
   return normalized;
 }
@@ -63,9 +60,7 @@ function matches(entry: LogMessage, pattern?: string): boolean {
   const needle = pattern.toLowerCase();
   // The script name is embedded in the message text, not a separate field, so
   // substring matching over message + source is the only thing available.
-  return (
-    entry.message.toLowerCase().includes(needle) || entry.from.toLowerCase().includes(needle)
-  );
+  return entry.message.toLowerCase().includes(needle) || entry.from.toLowerCase().includes(needle);
 }
 
 export async function logs(ctx: CommandContext, opts: LogsOptions = {}): Promise<LogsHandle> {

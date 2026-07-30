@@ -44,7 +44,7 @@ export class AdminObjectsApi implements ObjectsApi {
 
   async getScript(id: string): Promise<ScriptObject | null> {
     const obj = await this.socket.emit<IoBrokerObject | null>('getObject', [id]);
-    if (!obj || obj.type !== 'script') {
+    if (obj?.type !== 'script') {
       return null;
     }
     return obj;
@@ -55,8 +55,14 @@ export class AdminObjectsApi implements ObjectsApi {
    * enforces this at the call site; we do not merge in any other fields
    * here so a bug elsewhere cannot smuggle `enabled`/`engine`/etc. through.
    */
-  async extendScript(id: string, common: Pick<ScriptCommon, 'source' | 'engineType'>): Promise<void> {
-    await this.socket.emit('extendObject', [id, { common: { source: common.source, engineType: common.engineType } }]);
+  async extendScript(
+    id: string,
+    common: Pick<ScriptCommon, 'source' | 'engineType'>,
+  ): Promise<void> {
+    await this.socket.emit('extendObject', [
+      id,
+      { common: { source: common.source, engineType: common.engineType } },
+    ]);
   }
 
   async setEnabled(id: string, enabled: boolean): Promise<void> {

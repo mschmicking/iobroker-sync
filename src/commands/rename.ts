@@ -70,7 +70,10 @@ export async function rename(
 ): Promise<void> {
   const original = await ctx.objects.getScript(id);
   if (!original) {
-    throw new UserError(`Script "${id}" was not found.`, 'Run `iob-sync list` to see available ids.');
+    throw new UserError(
+      `Script "${id}" was not found.`,
+      'Run `iob-sync list` to see available ids.',
+    );
   }
 
   const sanitized = sanitizeSegment(newName);
@@ -104,7 +107,9 @@ export async function rename(
   await copyVerifyAndDelete(ctx, original, newId);
   ctx.log.result(`rename   ${id} -> ${newId}`);
 
-  const manifest = await loadManifest(ctx.root);
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
   const entry = manifest.entries[id];
   if (entry) {
     const oldLocalPath = path.join(ctx.scriptRoot, entry.path);

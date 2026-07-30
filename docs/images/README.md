@@ -16,7 +16,7 @@ the tool a static screenshot can show that a feature list cannot.
 
 An even stronger variant, if you want to spend the time: make the pushed script contain a
 deliberate error, so the right pane shows the compile failure arriving. That demonstrates
-*why* `logs` exists — `push` alone reports success either way.
+_why_ `logs` exists — `push` alone reports success either way.
 
 ### Capture settings
 

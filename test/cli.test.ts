@@ -31,7 +31,10 @@ interface RunResult {
   code: number;
 }
 
-async function runCli(args: string[], opts: { cwd?: string; input?: string } = {}): Promise<RunResult> {
+async function runCli(
+  args: string[],
+  opts: { cwd?: string; input?: string } = {},
+): Promise<RunResult> {
   try {
     const child = execFileAsync(process.execPath, [CLI, ...args], {
       cwd: opts.cwd,
@@ -55,8 +58,21 @@ describe('cli argv handling', () => {
 
     assert.equal(code, 0);
     for (const command of [
-      'init', 'login', 'logout', 'pull', 'push', 'status', 'diff',
-      'watch', 'logs', 'list', 'backup', 'start', 'stop', 'new', 'remove',
+      'init',
+      'login',
+      'logout',
+      'pull',
+      'push',
+      'status',
+      'diff',
+      'watch',
+      'logs',
+      'list',
+      'backup',
+      'start',
+      'stop',
+      'new',
+      'remove',
     ]) {
       assert.match(stdout, new RegExp(`\\b${command}\\b`), `--help should mention "${command}"`);
     }
@@ -96,10 +112,9 @@ describe('cli argv handling', () => {
         'utf8',
       );
 
-      const { stderr, code } = await runCli(
-        ['--password-stdin', '-C', project.root, 'login'],
-        { input: 'whatever\n' },
-      );
+      const { stderr, code } = await runCli(['--password-stdin', '-C', project.root, 'login'], {
+        input: 'whatever\n',
+      });
 
       assert.notEqual(code, 0);
       // It must fail trying to *reach* the instance, proving it read the password,

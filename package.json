@@ -25,7 +25,12 @@
     "test": "npm run build:test && node --test \"dist-test/test/**/*.test.js\"",
     "test:unit": "npm run build:test && node --test dist-test/test/mapping.test.js dist-test/test/compare.test.js",
     "clean": "rm -rf dist dist-test",
-    "prepublishOnly": "npm run clean && npm run build && npm test"
+    "prepublishOnly": "npm run clean && npm run lint && npm run build && npm test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run lint && npm run format:check && npx tsc -p tsconfig.json --noEmit && npm test"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -34,10 +39,15 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/diff": "^5.2.1",
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.13",
-    "typescript": "^5.7.2"
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "prettier": "^3.9.6",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.65.0"
   },
   "files": [
     "dist/",

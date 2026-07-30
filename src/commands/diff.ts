@@ -77,10 +77,7 @@ async function resolveSnapshotDir(root: string, name: string): Promise<string> {
       .map((e) => e.name)
       .sort();
   } catch {
-    throw new UserError(
-      `No snapshots found in ${backupRoot}.`,
-      'Run `iob-sync backup` first.',
-    );
+    throw new UserError(`No snapshots found in ${backupRoot}.`, 'Run `iob-sync backup` first.');
   }
 
   if (available.length === 0) {
@@ -92,17 +89,17 @@ async function resolveSnapshotDir(root: string, name: string): Promise<string> {
   }
 
   if (!available.includes(name)) {
-    throw new UserError(
-      `No snapshot named "${name}".`,
-      `Available: ${available.join(', ')}`,
-    );
+    throw new UserError(`No snapshot named "${name}".`, `Available: ${available.join(', ')}`);
   }
   return path.join(backupRoot, name);
 }
 
 /** Diffs the working tree against a snapshot. Never touches the server. */
-async function diffAgainstSnapshot(ctx: CommandContext, opts: DiffOptions): Promise<void> {
-  const snapshotDir = await resolveSnapshotDir(ctx.root, opts.against as string);
+async function diffAgainstSnapshot(
+  ctx: CommandContext,
+  opts: DiffOptions & { against: string },
+): Promise<void> {
+  const snapshotDir = await resolveSnapshotDir(ctx.root, opts.against);
 
   let manifest: BackupManifest;
   try {
@@ -165,11 +162,16 @@ async function diffAgainstSnapshot(ctx: CommandContext, opts: DiffOptions): Prom
 
 export async function diff(ctx: CommandContext, opts: DiffOptions): Promise<void> {
   if (opts.against) {
-    return diffAgainstSnapshot(ctx, opts);
+    return diffAgainstSnapshot(ctx, { ...opts, against: opts.against });
   }
 
-  const manifest = await loadManifest(ctx.root);
-  const [local, remoteScan] = await Promise.all([scanLocal(ctx.scriptRoot), scanRemote(ctx.objects)]);
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
+  const [local, remoteScan] = await Promise.all([
+    scanLocal(ctx.scriptRoot),
+    scanRemote(ctx.objects),
+  ]);
   const statuses = computeStatus({ manifest, remote: remoteScan.info, local })
     .filter((s) => matches(s, opts.pattern))
     .filter((s) => s.state !== 'in-sync');
@@ -188,7 +190,12 @@ export async function diff(ctx: CommandContext, opts: DiffOptions): Promise<void
       continue;
     }
 
-    const patch = createTwoFilesPatch(`remote:${status.id}`, `local:${status.path}`, remoteSource, localSource);
+    const patch = createTwoFilesPatch(
+      `remote:${status.id}`,
+      `local:${status.path}`,
+      remoteSource,
+      localSource,
+    );
     ctx.log.info(`--- ${status.state}: ${status.path} ---`);
     ctx.log.result(colorize(patch));
     ctx.log.data({ type: 'diff', id: status.id, path: status.path, state: status.state });

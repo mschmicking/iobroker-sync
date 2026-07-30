@@ -222,7 +222,12 @@ describe('diff', () => {
       // `push` cannot restore common.enabled, so the snapshot is the only record —
       // it would be useless if diff stayed silent about it.
       server.reset();
-      server.seed([{ ...script(ID, REMOTE_SOURCE), common: { ...script(ID, REMOTE_SOURCE).common, enabled: false } }]);
+      server.seed([
+        {
+          ...script(ID, REMOTE_SOURCE),
+          common: { ...script(ID, REMOTE_SOURCE).common, enabled: false },
+        },
+      ]);
       await writeLocal(project, REL, REMOTE_SOURCE);
 
       const t = await makeContext(port, project);

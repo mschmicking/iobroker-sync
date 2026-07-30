@@ -32,7 +32,9 @@ export async function remove(
   opts: { yes?: boolean; deleteLocal?: boolean },
 ): Promise<void> {
   const scriptObj = await ctx.objects.getScript(id);
-  const manifest = await loadManifest(ctx.root);
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
   const entry = manifest.entries[id];
   const localPath = entry ? path.join(ctx.scriptRoot, entry.path) : undefined;
 

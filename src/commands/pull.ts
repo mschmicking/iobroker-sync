@@ -6,8 +6,6 @@
  * `remote-missing` is only ever reported, never acted on.
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import { CommandContext, Manifest, ScriptObject, SyncStatus } from '../types';
 import { loadManifest, saveManifest, upsertEntry } from '../sync/manifest';
 import { computeStatus } from '../sync/compare';
@@ -37,7 +35,9 @@ async function writeFromRemote(
 
   const engineType = script.common.engineType ?? status.engineType ?? '';
   if (!isEditableEngineType(engineType)) {
-    ctx.log.warn(`${status.path}: ${engineType} content is generated (Blockly/Rules), not hand-editable source.`);
+    ctx.log.warn(
+      `${status.path}: ${engineType} content is generated (Blockly/Rules), not hand-editable source.`,
+    );
   }
 
   const source = normalizeSource(script.common.source ?? '');
@@ -68,9 +68,16 @@ async function writeFromRemote(
 }
 
 export async function pull(ctx: CommandContext, opts: PullOptions): Promise<void> {
-  const manifest = await loadManifest(ctx.root);
-  const [local, remoteScan] = await Promise.all([scanLocal(ctx.scriptRoot), scanRemote(ctx.objects)]);
-  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) => matches(s, opts.pattern));
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
+  const [local, remoteScan] = await Promise.all([
+    scanLocal(ctx.scriptRoot),
+    scanRemote(ctx.objects),
+  ]);
+  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) =>
+    matches(s, opts.pattern),
+  );
 
   let changed = false;
   let pulled = 0;
@@ -126,7 +133,9 @@ async function pullOne(
     }
 
     case 'remote-missing': {
-      ctx.log.warn(`${status.path}: no longer exists on the server (tracked locally); leaving local file untouched.`);
+      ctx.log.warn(
+        `${status.path}: no longer exists on the server (tracked locally); leaving local file untouched.`,
+      );
       return { pulled: 0, skipped: 0 };
     }
 

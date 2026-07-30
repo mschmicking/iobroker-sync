@@ -30,13 +30,13 @@ instruction from the user:
 3. **Conflicts block.** If local and remote both changed, refuse and exit non-zero.
 4. **Deletion is explicit.** Only `remove`, `rename` and `move` delete anything, each
    requires `--yes`, and each writes the full object JSON to `.iobroker-sync/trash/`
-   *before* deleting. A failed backup aborts the operation.
+   _before_ deleting. A failed backup aborts the operation.
 5. **Copy-then-delete must verify first.** ioBroker has no native rename/move, so both
    are implemented as copy-verify-delete. The verification compares the actual source
    text. Checking only that "something exists at the new id" is not verification — a
    truncated copy would pass and the original would be destroyed.
 6. **`backup` is read-only and all-or-nothing.** It fetches objects and writes files,
-   never mutating the server. It stores the *whole* object, not just the source, because
+   never mutating the server. It stores the _whole_ object, not just the source, because
    `push` cannot write `common.enabled` or `common.engine` back (invariant 2) — so
    `objects/*.json` is the only record of those. A partial snapshot is worse than none,
    so any write failure aborts with a `UserError` rather than leaving a plausible-looking
@@ -111,7 +111,7 @@ infinite-loops on connection errors against this server.
   never be closed, and nothing would appear until exit.
 - User-facing failures are `UserError` (message + optional hint); `cli.ts` prints them
   without a stack trace and sets exit code 1.
-- Comments explain *why*, not *what*. The non-obvious protocol and safety reasoning is
+- Comments explain _why_, not _what_. The non-obvious protocol and safety reasoning is
   worth writing down; restating the code is not.
 - No new npm dependencies without a good reason. Current set: `ws`, `commander`,
   `chokidar`, `diff`.
@@ -138,7 +138,7 @@ and the commands `pull`, `push`, `status`, `diff` (including `--against`), `watc
 `sync/manifest` and `sync/scan` are covered indirectly by every pull/push test.
 
 `test/cli.test.ts` spawns the built `dist/cli.js` and asserts on real argv handling.
-It exists because a duplicate `--password-stdin` declaration — global *and* on the
+It exists because a duplicate `--password-stdin` declaration — global _and_ on the
 `login` subcommand — was silently shadowed by commander, and no in-process test could
 see it. **Anything about option wiring, exit codes or stdout/stderr separation belongs
 there, and it needs `dist/` built first.**
@@ -178,7 +178,7 @@ The password must never reach the project directory, argv, or a log line:
   (override with `IOBROKER_SYNC_CREDENTIALS`, which every test does so the suite never
   reads the developer's real store), mode `0600` in a `0700` directory, written
   temp-then-rename so an interrupted write cannot truncate it.
-- `iob-sync login` verifies a password against the live instance *before* saving, so a
+- `iob-sync login` verifies a password against the live instance _before_ saving, so a
   typo fails now rather than on the next command.
 - Prompts require stdin **and** stdout to be TTYs, so a script, CI job or agent gets a
   `UserError` instead of a hang.
@@ -200,7 +200,7 @@ that can actually drive the watcher:
 
 1. `watch()` returned before chokidar finished its initial scan, so any edit saved in
    that window was silently dropped. It now awaits the `ready` event.
-2. `lastPushedHash` was recorded *after* the server write completed, so an adapter
+2. `lastPushedHash` was recorded _after_ the server write completed, so an adapter
    echo arriving mid-flight escaped the echo guard and produced a spurious pull. The
    hash is now recorded before the write.
 
@@ -237,3 +237,30 @@ The CLI is a tool; the scripts it syncs belong in their own repository. Do not a
 `scripts/` directory here — running `iob-sync init` inside this repo is what caused the
 `tsconfig.json` breakage above. Test commands against `test/fake-server.ts` and
 temporary project directories instead.
+
+## Linting and formatting
+
+```bash
+npm run lint          # eslint, type-aware
+npm run format        # prettier --write
+npm run verify        # lint + format check + typecheck + tests
+```
+
+Two rules encode invariants rather than taste, and must not be relaxed:
+
+- **`no-console` is an error everywhere in `src/` except `cli.ts`.** Only the CLI layer
+  owns stdout/stderr; everything else goes through `ctx.log`. This caught three
+  `console.warn` calls in `sync/manifest.ts` that bypassed the logger entirely — they
+  could not be captured by tests and ignored `--json`. `loadManifest` now takes a
+  `warn` callback.
+- **`no-floating-promises` is an error.** An unawaited write to a live instance means the
+  command reports success and exits with the request still in flight. `node:test`'s
+  `describe`/`it` are declared safe via `allowForKnownSafeCalls` rather than switching
+  the rule off in tests.
+
+Three rules from `strictTypeChecked` are deliberately **off**, with the reasoning in
+`eslint.config.mjs`. The important one: `no-unnecessary-condition`. `socket.emit<T>()`
+returns `T`, but that type is a _claim_ about what the server should send, not a
+guarantee — so guards like `result?.rows ?? []` look redundant to the rule and are
+essential at runtime. Following it would trade a handled edge case for a crash against
+someone's house.

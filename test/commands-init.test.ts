@@ -18,14 +18,15 @@ import { UserError } from '../src/types';
 import { makeCapturingLogger, makeTempProject } from './helpers';
 
 /** A stand-in for a real build config: owns rootDir/outDir, must survive untouched. */
-const ROOT_TSCONFIG = JSON.stringify(
-  {
-    compilerOptions: { rootDir: 'src', outDir: 'dist', strict: true },
-    include: ['src/**/*.ts'],
-  },
-  null,
-  2,
-) + '\n';
+const ROOT_TSCONFIG =
+  JSON.stringify(
+    {
+      compilerOptions: { rootDir: 'src', outDir: 'dist', strict: true },
+      include: ['src/**/*.ts'],
+    },
+    null,
+    2,
+  ) + '\n';
 
 // Unroutable port, so probeConnection fails fast and just warns.
 const DEAD_URL = 'http://127.0.0.1:1';
@@ -121,11 +122,7 @@ describe('init config and secrets', () => {
     process.env.IOBROKER_PASSWORD = 'sup3r-s3cret-passphrase';
     try {
       const { log } = makeCapturingLogger();
-      await runInit(
-        project.root,
-        { url: DEAD_URL, username: 'admin', interactive: false },
-        log,
-      );
+      await runInit(project.root, { url: DEAD_URL, username: 'admin', interactive: false }, log);
 
       // The config lives in the user's git repo. The username belongs there; the
       // password belongs in the 0600 store outside it (see src/credentials.ts).
@@ -182,7 +179,9 @@ describe('init config and secrets', () => {
       await runInit(project.root, { url: DEAD_URL, interactive: false }, log);
 
       const gitignore = await fs.readFile(path.join(project.root, '.gitignore'), 'utf8');
-      const occurrences = gitignore.split('\n').filter((l) => l.trim() === '.iobroker-sync/').length;
+      const occurrences = gitignore
+        .split('\n')
+        .filter((l) => l.trim() === '.iobroker-sync/').length;
       assert.equal(occurrences, 1);
     } finally {
       await project.cleanup();

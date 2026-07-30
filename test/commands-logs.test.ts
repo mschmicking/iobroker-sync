@@ -15,11 +15,7 @@ import { TempProject, makeContext, makeTempProject } from './helpers';
 import { formatLogLine, logs } from '../src/commands/logs';
 import { UserError } from '../src/types';
 
-async function waitFor(
-  cond: () => boolean,
-  label: string,
-  timeoutMs = 3000,
-): Promise<void> {
+async function waitFor(cond: () => boolean, label: string, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (cond()) return;
@@ -90,10 +86,7 @@ describe('logs', () => {
     try {
       server.emitLog({ message: 'TypeError: x is not a function', severity: 'error' });
 
-      await waitFor(
-        () => t.captured.result.some((l) => l.includes('TypeError')),
-        'the error line',
-      );
+      await waitFor(() => t.captured.result.some((l) => l.includes('TypeError')), 'the error line');
     } finally {
       await handle.stop();
       await t.close();

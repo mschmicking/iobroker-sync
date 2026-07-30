@@ -81,7 +81,11 @@ describe('idToRelPath', () => {
 
 describe('relPathToId', () => {
   test('inverse of idToRelPath for clean ids (round trip)', () => {
-    const ids = ['script.js.common.garage', 'script.js.Switch-Musiccast', 'script.js.Rollos.astroControl_sun_temp_tracker'];
+    const ids = [
+      'script.js.common.garage',
+      'script.js.Switch-Musiccast',
+      'script.js.Rollos.astroControl_sun_temp_tracker',
+    ];
     for (const id of ids) {
       const relPath = idToRelPath(id, 'TypeScript/ts');
       assert.equal(relPathToId(relPath), id);
@@ -93,7 +97,10 @@ describe('relPathToId', () => {
   });
 
   test('nested file', () => {
-    assert.equal(relPathToId('Rollos/astroControl_sun_temp_tracker.ts'), 'script.js.Rollos.astroControl_sun_temp_tracker');
+    assert.equal(
+      relPathToId('Rollos/astroControl_sun_temp_tracker.ts'),
+      'script.js.Rollos.astroControl_sun_temp_tracker',
+    );
   });
 
   test('sanitises spaces and disallowed characters within a segment', () => {

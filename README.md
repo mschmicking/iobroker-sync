@@ -8,6 +8,7 @@ search across scripts, no editor of your choice, and no way to touch them from a
 or a CI job. `iobroker-sync` maps them to a local folder and keeps the two in step.
 
 <!-- Screenshot to add before v1.0 — see docs/images/README.md for exactly what to capture. -->
+
 ![Two terminal panes side by side. On the left, a script is edited and iob-sync push reports it was uploaded. On the right, iob-sync logs is streaming the ioBroker log, where the script's own output appears a moment later.](docs/images/edit-loop.png)
 
 ## Quick start
@@ -41,13 +42,13 @@ That is the whole loop. `git init` in that folder and your home automation has h
 
 The five commands worth knowing on day one:
 
-| | |
-| --- | --- |
-| `iob-sync pull` | bring the server's scripts down |
-| `iob-sync status` | what differs, locally and remotely |
-| `iob-sync push` | send your edits up |
-| `iob-sync logs` | watch script output — **this is how you find out a push actually worked** |
-| `iob-sync backup` | snapshot everything before you touch something important |
+|                   |                                                                           |
+| ----------------- | ------------------------------------------------------------------------- |
+| `iob-sync pull`   | bring the server's scripts down                                           |
+| `iob-sync status` | what differs, locally and remotely                                        |
+| `iob-sync push`   | send your edits up                                                        |
+| `iob-sync logs`   | watch script output — **this is how you find out a push actually worked** |
+| `iob-sync backup` | snapshot everything before you touch something important                  |
 
 ## Contents
 
@@ -84,14 +85,14 @@ The [ioBroker JavaScript VS Code extension](https://github.com/nokxs/iobroker-ja
 by nokxs solves the same core problem and inspired this tool. If you work in VS Code, it
 is genuinely good and does things a CLI cannot — go use it.
 
-| | iobroker-sync | VS Code extension |
-| --- | --- | --- |
-| Editor | any, or none | VS Code |
-| State-ID autocompletion, hover values | — | yes |
-| Script tree, buttons, context menus | — (`iob-sync list`) | yes |
-| Works over SSH, in CI, headless | yes | — |
-| Machine-readable output | yes | — |
-| Scriptable from a shell or an agent | yes | — |
+|                                       | iobroker-sync       | VS Code extension |
+| ------------------------------------- | ------------------- | ----------------- |
+| Editor                                | any, or none        | VS Code           |
+| State-ID autocompletion, hover values | —                   | yes               |
+| Script tree, buttons, context menus   | — (`iob-sync list`) | yes               |
+| Works over SSH, in CI, headless       | yes                 | —                 |
+| Machine-readable output               | yes                 | —                 |
+| Scriptable from a shell or an agent   | yes                 | —                 |
 
 Rough rule: **if you live in VS Code, use the extension.** If you want your own editor, a
 git-first workflow, or anything automated, use this. They are not exclusive — both talk
@@ -99,9 +100,9 @@ to the same Admin API, and this tool never writes fields it does not own.
 
 ## How scripts map to files
 
-| ioBroker object | local file |
-| --- | --- |
-| `script.js.common.garage` (`TypeScript/ts`) | `scripts/common/garage.ts` |
+| ioBroker object                                | local file                    |
+| ---------------------------------------------- | ----------------------------- |
+| `script.js.common.garage` (`TypeScript/ts`)    | `scripts/common/garage.ts`    |
 | `script.js.Switch-Musiccast` (`Javascript/js`) | `scripts/Switch-Musiccast.js` |
 
 Script folders are ioBroker `channel` objects; nested folders map to nested directories.
@@ -134,26 +135,26 @@ iob-sync logs --level error    # only failures
 
 **Sync**
 
-| Command | Description |
-| --- | --- |
-| `init` | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions. |
-| `login` / `logout` | Save or remove the password for this instance. Never stored in the project. |
-| `pull [pattern]` | Download scripts to disk. Never deletes local files. |
-| `push [pattern]` | Upload locally modified scripts. Never deletes remote objects. |
-| `status` | Show what changed, locally and remotely. |
-| `diff [pattern]` | Unified diff of local vs server. `--against <snapshot>` compares with a backup instead. |
-| `watch` | Push on save. `--pull` also applies remote changes. |
-| `logs [pattern]` | Stream the server log. `--level`, `--limit`. Read-only. |
-| `backup [pattern]` | Snapshot every script — source *and* full object — to `.iobroker-sync/backup/<timestamp>/`. Read-only against the server. |
+| Command            | Description                                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`             | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions. |
+| `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                             |
+| `pull [pattern]`   | Download scripts to disk. Never deletes local files.                                                                                                                    |
+| `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                          |
+| `status`           | Show what changed, locally and remotely.                                                                                                                                |
+| `diff [pattern]`   | Unified diff of local vs server. `--against <snapshot>` compares with a backup instead.                                                                                 |
+| `watch`            | Push on save. `--pull` also applies remote changes.                                                                                                                     |
+| `logs [pattern]`   | Stream the server log. `--level`, `--limit`. Read-only.                                                                                                                 |
+| `backup [pattern]` | Snapshot every script — source _and_ full object — to `.iobroker-sync/backup/<timestamp>/`. Read-only against the server.                                               |
 
 **Lifecycle**
 
-| Command | Description |
-| --- | --- |
-| `list` | All scripts with instance and enabled state. |
-| `start` / `stop` / `restart` `<pattern>` | Toggle `common.enabled`. |
-| `new <path>` | Create a new script (disabled) plus any missing folders. |
-| `rename` / `move` / `remove` | Destructive. Require `--yes` and back up the object first. `remove` keeps the local file unless `--delete-local`. |
+| Command                                  | Description                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `list`                                   | All scripts with instance and enabled state.                                                                      |
+| `start` / `stop` / `restart` `<pattern>` | Toggle `common.enabled`.                                                                                          |
+| `new <path>`                             | Create a new script (disabled) plus any missing folders.                                                          |
+| `rename` / `move` / `remove`             | Destructive. Require `--yes` and back up the object first. `remove` keeps the local file unless `--delete-local`. |
 
 `--dry-run`, `--verbose`, `--json` and `-C <dir>` are global options and work with every
 command. When in doubt, `--dry-run` shows what would happen and changes nothing.
@@ -172,7 +173,7 @@ destroying work:
 - **`pull` never deletes local files.** A script removed on the server shows up in `status`
   as `remote-missing`; what to do about it is your call.
 - **`push` never deletes remote objects**, and writes only `common.source` and
-  `common.engineType`. It *cannot* disable a running script or move it to a different
+  `common.engineType`. It _cannot_ disable a running script or move it to a different
   javascript instance, because it never sends those fields — a sync bug structurally
   cannot stop your heating.
 - **Conflicts block.** A manifest at `.iobroker-sync/state.json` records the source hash at
@@ -215,12 +216,12 @@ in a `0700` directory, outside your repo. `iob-sync logout` removes it.
 There is deliberately **no `--password` flag**: argv is visible to other local processes
 via `ps` and is recorded in shell history. The alternatives, in the order they are tried:
 
-| Source | Use |
-| --- | --- |
-| `--password-stdin` | scripts and CI: `printf '%s' "$PW" \| iob-sync --password-stdin login` |
-| `IOBROKER_PASSWORD` | ad-hoc shells |
-| saved credentials | normal interactive use, after `iob-sync login` |
-| hidden prompt | when nothing else is available and a terminal is attached |
+| Source              | Use                                                                    |
+| ------------------- | ---------------------------------------------------------------------- |
+| `--password-stdin`  | scripts and CI: `printf '%s' "$PW" \| iob-sync --password-stdin login` |
+| `IOBROKER_PASSWORD` | ad-hoc shells                                                          |
+| saved credentials   | normal interactive use, after `iob-sync login`                         |
+| hidden prompt       | when nothing else is available and a terminal is attached              |
 
 OAuth2 (`/oauth/token`) is tried first, falling back to the legacy `/login` endpoint.
 `--verbose` reports which path was used.

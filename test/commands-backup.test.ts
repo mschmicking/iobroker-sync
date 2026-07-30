@@ -38,7 +38,7 @@ function script(id: string, overrides: Partial<ScriptObject['common']> = {}): Sc
 }
 
 async function readManifestAt(dir: string): Promise<BackupManifest> {
-  return JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
+  return JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8')) as BackupManifest;
 }
 
 describe('backup', () => {
@@ -117,10 +117,7 @@ describe('backup', () => {
       const dir = await backup(t.ctx);
       // The on-disk copy is a faithful record, not a normalised one: a restore has
       // to reproduce exactly what the server had.
-      assert.equal(
-        await fs.readFile(path.join(dir, 'sources', 'crlf.ts'), 'utf8'),
-        CRLF_SOURCE,
-      );
+      assert.equal(await fs.readFile(path.join(dir, 'sources', 'crlf.ts'), 'utf8'), CRLF_SOURCE);
     } finally {
       await t.close();
     }
@@ -182,9 +179,7 @@ describe('backup', () => {
     const t = await makeContext(port, project, { dryRun: true });
     try {
       await backup(t.ctx);
-      const made = await fs
-        .readdir(path.join(project.root, STATE_DIR, 'backup'))
-        .catch(() => []);
+      const made = await fs.readdir(path.join(project.root, STATE_DIR, 'backup')).catch(() => []);
       assert.equal(made.length, 0);
     } finally {
       await t.close();

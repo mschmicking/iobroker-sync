@@ -61,7 +61,9 @@ function matches(value: string, id: string, pattern?: string): boolean {
 }
 
 export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<WatchHandle> {
-  const manifest = await loadManifest(ctx.root);
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
   const debounceMs = opts.debounceMs ?? DEBOUNCE_MS;
 
   /** Hash of the source we last successfully pushed for a given id (echo suppression). */
@@ -108,7 +110,9 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
       const localChanged = localHash !== baseHash;
       const remoteChanged = remoteHash !== baseHash;
       if (localChanged && remoteChanged && localHash !== remoteHash) {
-        ctx.log.warn(`${relPath}: conflict with remote changes; not pushing. Resolve with diff/pull --force.`);
+        ctx.log.warn(
+          `${relPath}: conflict with remote changes; not pushing. Resolve with diff/pull --force.`,
+        );
         return;
       }
     }
@@ -154,7 +158,8 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
       id,
       path: relPath,
       engineType,
-      engine: entry?.engine ?? (remoteScript ? remoteScript.common.engine : ctx.config.defaultInstance),
+      engine:
+        entry?.engine ?? (remoteScript ? remoteScript.common.engine : ctx.config.defaultInstance),
       enabled: entry?.enabled ?? (remoteScript ? remoteScript.common.enabled : false),
       baseHash: localHash,
       lastSync: new Date().toISOString(),
@@ -175,13 +180,15 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
       relPath,
       setTimeout(() => {
         debounceTimers.delete(relPath);
-        pushFile(relPath).catch((err) => ctx.log.error(`${relPath}: ${(err as Error).message}`));
+        pushFile(relPath).catch((err: unknown) => {
+          ctx.log.error(`${relPath}: ${(err as Error).message}`);
+        });
       }, debounceMs),
     );
   }
 
   async function applyRemoteChange(id: string, obj: IoBrokerObject | null): Promise<void> {
-    if (!obj || obj.type !== 'script') return;
+    if (obj?.type !== 'script') return;
 
     const engineType = obj.common.engineType ?? '';
     const source = normalizeSource(obj.common.source ?? '');
@@ -198,7 +205,9 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
     if (!matches(relPath, id, opts.pattern)) return;
 
     if (!isEditableEngineType(engineType)) {
-      ctx.log.warn(`${relPath}: Blockly/Rules content changed remotely; skipping auto-pull (generated content).`);
+      ctx.log.warn(
+        `${relPath}: Blockly/Rules content changed remotely; skipping auto-pull (generated content).`,
+      );
       return;
     }
 
@@ -212,8 +221,15 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
     }
 
     const baseHash = entry?.baseHash;
-    if (localHash !== undefined && baseHash !== undefined && localHash !== baseHash && localHash !== remoteHash) {
-      ctx.log.warn(`${relPath}: remote changed but local also has unsaved changes; not overwriting (conflict).`);
+    if (
+      localHash !== undefined &&
+      baseHash !== undefined &&
+      localHash !== baseHash &&
+      localHash !== remoteHash
+    ) {
+      ctx.log.warn(
+        `${relPath}: remote changed but local also has unsaved changes; not overwriting (conflict).`,
+      );
       return;
     }
 
@@ -250,7 +266,7 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
 
   watcher.on('add', scheduleFile);
   watcher.on('change', scheduleFile);
-  watcher.on('error', (err) => ctx.log.error(`watcher error: ${(err as Error).message}`));
+  watcher.on('error', (err) => ctx.log.error(`watcher error: ${err.message}`));
 
   // chokidar only starts reporting events once its initial scan completes. Returning
   // before that (and telling the user we are watching) silently drops any edit saved
@@ -263,12 +279,16 @@ export async function watch(ctx: CommandContext, opts: WatchOptions): Promise<Wa
   let subscribed = false;
   if (opts.pull) {
     await ctx.socket.subscribeObjects(SCRIPT_PATTERN, (id, obj) => {
-      applyRemoteChange(id, obj).catch((err) => ctx.log.error(`${id}: ${(err as Error).message}`));
+      applyRemoteChange(id, obj).catch((err: unknown) => {
+        ctx.log.error(`${id}: ${(err as Error).message}`);
+      });
     });
     subscribed = true;
   }
 
-  ctx.log.info(`Watching "${ctx.scriptRoot}" for changes${opts.pull ? ' (pulling remote changes too)' : ''}.`);
+  ctx.log.info(
+    `Watching "${ctx.scriptRoot}" for changes${opts.pull ? ' (pulling remote changes too)' : ''}.`,
+  );
 
   let stopped = false;
   async function stop(): Promise<void> {

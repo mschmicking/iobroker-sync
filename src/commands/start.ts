@@ -30,7 +30,5 @@ export async function start(ctx: CommandContext, opts: { pattern?: string }): Pr
     ctx.log.info(`Skipped ${skipped} already running.`);
   }
 
-  ctx.log.result(
-    `Started ${started} script${started === 1 ? '' : 's'}.`,
-  );
+  ctx.log.result(`Started ${started} script${started === 1 ? '' : 's'}.`);
 }

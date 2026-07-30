@@ -11,7 +11,7 @@ import * as readline from 'node:readline';
 import { stdin, stdout } from 'node:process';
 
 export function isInteractive(): boolean {
-  return Boolean(stdin.isTTY && stdout.isTTY);
+  return stdin.isTTY && stdout.isTTY;
 }
 
 /** Asks a question, returning the trimmed answer, or `fallback` when the user just hits enter. */
@@ -78,5 +78,7 @@ export async function readPasswordFromStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of stdin) chunks.push(chunk as Buffer);
   // Only the trailing newline from `echo` is stripped; a password may contain spaces.
-  return Buffer.concat(chunks).toString('utf8').replace(/\r?\n$/, '');
+  return Buffer.concat(chunks)
+    .toString('utf8')
+    .replace(/\r?\n$/, '');
 }

@@ -133,10 +133,7 @@ describe('watch', () => {
     const handle = await watch(t.ctx, { pull: true, debounceMs: DEBOUNCE });
     try {
       await writeLocal(project, REL, SOURCE_B);
-      await waitFor(
-        () => pushLines(t.captured.result).length === 1,
-        'the push to complete',
-      );
+      await waitFor(() => pushLines(t.captured.result).length === 1, 'the push to complete');
 
       // What the javascript adapter does after a push: same source, plus the
       // fields it manages itself.
@@ -145,7 +142,7 @@ describe('watch', () => {
         script(SOURCE_B, {
           sourceHash: 'recomputed-by-the-adapter',
           compiled: 'var b = 1;',
-        } as Partial<ScriptObject['common']>),
+        }),
       );
       await settle();
 
@@ -201,7 +198,10 @@ describe('watch', () => {
     try {
       server.emitObjectChange(ID, script(SOURCE_C));
 
-      await waitFor(async () => (await readLocal(project, REL)) === SOURCE_C, 'the remote change on disk');
+      await waitFor(
+        async () => (await readLocal(project, REL)) === SOURCE_C,
+        'the remote change on disk',
+      );
 
       const manifest = await readManifest(project.root);
       assert.equal(manifest.entries[ID]?.path, REL);

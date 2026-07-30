@@ -89,9 +89,7 @@ async function checkPermissions(file: string, warn?: (msg: string) => void): Pro
   try {
     const stat = await fs.stat(file);
     if ((stat.mode & 0o077) !== 0) {
-      warn(
-        `${file} is readable by other users; run \`chmod 600 ${file}\` to restrict it.`,
-      );
+      warn(`${file} is readable by other users; run \`chmod 600 ${file}\` to restrict it.`);
     }
   } catch {
     // Nothing to check.
@@ -139,7 +137,10 @@ export async function saveStoredPassword(
 
   const tmp = `${file}.tmp-${process.pid}`;
   try {
-    await fs.writeFile(tmp, JSON.stringify(store, null, 2) + '\n', { encoding: 'utf8', mode: FILE_MODE });
+    await fs.writeFile(tmp, JSON.stringify(store, null, 2) + '\n', {
+      encoding: 'utf8',
+      mode: FILE_MODE,
+    });
     await fs.rename(tmp, file);
   } catch (err) {
     await fs.rm(tmp, { force: true }).catch(() => undefined);
@@ -166,6 +167,9 @@ export async function deleteStoredPassword(url: string, username: string | null)
   if (!(key in store.credentials)) return false;
 
   delete store.credentials[key];
-  await fs.writeFile(file, JSON.stringify(store, null, 2) + '\n', { encoding: 'utf8', mode: FILE_MODE });
+  await fs.writeFile(file, JSON.stringify(store, null, 2) + '\n', {
+    encoding: 'utf8',
+    mode: FILE_MODE,
+  });
   return true;
 }

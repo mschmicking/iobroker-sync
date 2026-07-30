@@ -12,7 +12,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { defaultConfig, loadConfig, writeConfig } from '../src/config';
-import { CONFIG_FILENAME, Config, UserError } from '../src/types';
+import { CONFIG_FILENAME, UserError } from '../src/types';
 import { TempProject, makeTempProject, testConfig } from './helpers';
 
 async function writeRawConfig(root: string, contents: string): Promise<void> {
@@ -114,10 +114,7 @@ describe('loadConfig', () => {
     await writeRawConfig(project.root, JSON.stringify(testConfig({ username: null })));
     assert.equal((await loadConfig(project.root)).config.username, null);
 
-    await writeRawConfig(
-      project.root,
-      JSON.stringify({ ...testConfig(), username: 42 } as unknown as Config),
-    );
+    await writeRawConfig(project.root, JSON.stringify({ ...testConfig(), username: 42 }));
     await expectUserError(() => loadConfig(project.root), /username/i);
   });
 });

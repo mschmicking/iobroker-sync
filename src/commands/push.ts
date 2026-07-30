@@ -12,7 +12,12 @@ import { CommandContext, Manifest, ScriptObject, SyncStatus, UserError } from '.
 import { findByPath, loadManifest, saveManifest, upsertEntry } from '../sync/manifest';
 import { computeStatus } from '../sync/compare';
 import { scanLocal, scanRemote, matchesPattern } from '../sync/scan';
-import { extensionToEngineType, hashSource, isEditableEngineType, normalizeSource } from '../sync/mapping';
+import {
+  extensionToEngineType,
+  hashSource,
+  isEditableEngineType,
+  normalizeSource,
+} from '../sync/mapping';
 
 export interface PushOptions {
   pattern?: string;
@@ -30,12 +35,18 @@ async function readLocalSource(scriptRoot: string, relPath: string): Promise<str
 }
 
 /** Pushes an existing (already-synced) script. Uses the manifest's exact id. */
-async function pushExisting(ctx: CommandContext, manifest: Manifest, status: SyncStatus): Promise<void> {
+async function pushExisting(
+  ctx: CommandContext,
+  manifest: Manifest,
+  status: SyncStatus,
+): Promise<void> {
   const source = await readLocalSource(ctx.scriptRoot, status.path);
   const engineType = extensionToEngineType(status.path) ?? status.engineType ?? '';
 
   if (!isEditableEngineType(engineType)) {
-    ctx.log.warn(`${status.path}: ${engineType} content is generated (Blockly/Rules); pushing raw content anyway.`);
+    ctx.log.warn(
+      `${status.path}: ${engineType} content is generated (Blockly/Rules); pushing raw content anyway.`,
+    );
   }
 
   if (ctx.dryRun) {
@@ -71,7 +82,9 @@ async function pushNew(ctx: CommandContext, manifest: Manifest, status: SyncStat
   }
 
   if (!isEditableEngineType(engineType)) {
-    ctx.log.warn(`${status.path}: ${engineType} content is generated (Blockly/Rules); pushing raw content anyway.`);
+    ctx.log.warn(
+      `${status.path}: ${engineType} content is generated (Blockly/Rules); pushing raw content anyway.`,
+    );
   }
 
   if (ctx.dryRun) {
@@ -113,9 +126,16 @@ async function pushNew(ctx: CommandContext, manifest: Manifest, status: SyncStat
 }
 
 export async function push(ctx: CommandContext, opts: PushOptions): Promise<void> {
-  const manifest = await loadManifest(ctx.root);
-  const [local, remoteScan] = await Promise.all([scanLocal(ctx.scriptRoot), scanRemote(ctx.objects)]);
-  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) => matches(s, opts.pattern));
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
+  const [local, remoteScan] = await Promise.all([
+    scanLocal(ctx.scriptRoot),
+    scanRemote(ctx.objects),
+  ]);
+  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) =>
+    matches(s, opts.pattern),
+  );
 
   let changed = false;
   let pushed = 0;
@@ -151,7 +171,9 @@ export async function push(ctx: CommandContext, opts: PushOptions): Promise<void
           pushed++;
           if (!ctx.dryRun) changed = true;
         } else {
-          ctx.log.warn(`${status.path}: refused (conflict with remote changes). Use --force to overwrite, or pull first.`);
+          ctx.log.warn(
+            `${status.path}: refused (conflict with remote changes). Use --force to overwrite, or pull first.`,
+          );
           refused.push(status);
         }
         break;

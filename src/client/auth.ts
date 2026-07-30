@@ -109,7 +109,7 @@ function request(
 function extractCookie(res: HttpResponse, cookieName: string): string | undefined {
   for (const raw of res.cookies) {
     const pair = raw.split(';', 1)[0]?.trim();
-    if (pair && pair.startsWith(`${cookieName}=`)) {
+    if (pair?.startsWith(`${cookieName}=`)) {
       return pair;
     }
   }

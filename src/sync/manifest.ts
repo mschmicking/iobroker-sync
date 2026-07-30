@@ -15,7 +15,12 @@ function emptyManifest(): Manifest {
 function isValidManifestShape(value: unknown): value is Manifest {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
-  return v.version === 1 && typeof v.entries === 'object' && v.entries !== null && !Array.isArray(v.entries);
+  return (
+    v.version === 1 &&
+    typeof v.entries === 'object' &&
+    v.entries !== null &&
+    !Array.isArray(v.entries)
+  );
 }
 
 /**
@@ -24,7 +29,15 @@ function isValidManifestShape(value: unknown): value is Manifest {
  * warning) rather than throwing — a broken manifest must never block the user; the
  * worst case is that everything looks "new" again.
  */
-export async function loadManifest(root: string): Promise<Manifest> {
+/**
+ * Loads the sync manifest, falling back to an empty one when it is missing,
+ * unreadable or malformed.
+ *
+ * `warn` is threaded in rather than writing to the console directly: only cli.ts
+ * owns stdout/stderr (see AGENTS.md), and a warning that bypasses the logger cannot
+ * be captured by tests or suppressed under --json.
+ */
+export async function loadManifest(root: string, warn?: (msg: string) => void): Promise<Manifest> {
   const target = path.join(root, STATE_DIR, MANIFEST_FILENAME);
 
   let raw: string;
@@ -34,7 +47,9 @@ export async function loadManifest(root: string): Promise<Manifest> {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       return emptyManifest();
     }
-    console.warn(`iob-sync: could not read manifest at "${target}" (${(err as Error).message}); starting fresh.`);
+    warn?.(
+      `iob-sync: could not read manifest at "${target}" (${(err as Error).message}); starting fresh.`,
+    );
     return emptyManifest();
   }
 
@@ -42,12 +57,14 @@ export async function loadManifest(root: string): Promise<Manifest> {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    console.warn(`iob-sync: manifest at "${target}" is not valid JSON (${(err as Error).message}); starting fresh.`);
+    warn?.(
+      `iob-sync: manifest at "${target}" is not valid JSON (${(err as Error).message}); starting fresh.`,
+    );
     return emptyManifest();
   }
 
   if (!isValidManifestShape(parsed)) {
-    console.warn(`iob-sync: manifest at "${target}" has an unexpected shape; starting fresh.`);
+    warn?.(`iob-sync: manifest at "${target}" has an unexpected shape; starting fresh.`);
     return emptyManifest();
   }
 

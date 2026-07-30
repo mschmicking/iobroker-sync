@@ -33,6 +33,17 @@ const CLIENT_NAME = 'iobroker-sync';
 
 type Frame = [number, number | null, string?, unknown?];
 
+/**
+ * `ws` hands back a Buffer, an ArrayBuffer or an array of Buffers depending on how
+ * the frame arrived. Calling toString() on the array form yields '[object Object]'
+ * and the parse fails for a reason that is impossible to read in a stack trace.
+ */
+function rawDataToString(data: WebSocket.RawData): string {
+  if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
+  if (Buffer.isBuffer(data)) return data.toString('utf8');
+  return Buffer.from(data).toString('utf8');
+}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
@@ -55,7 +66,10 @@ function toWebSocketUrl(baseUrl: string): string {
   try {
     parsed = new URL(baseUrl);
   } catch {
-    throw new UserError(`Invalid Admin URL: "${baseUrl}"`, 'Check the "url" field in your config file.');
+    throw new UserError(
+      `Invalid Admin URL: "${baseUrl}"`,
+      'Check the "url" field in your config file.',
+    );
   }
   const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
   const sid = Date.now();
@@ -126,7 +140,7 @@ export class AdminSocketClient implements SocketClient {
       ws.on('message', (data: WebSocket.RawData) => {
         let frame: Frame;
         try {
-          frame = JSON.parse(data.toString());
+          frame = JSON.parse(rawDataToString(data));
         } catch {
           return;
         }
@@ -158,7 +172,10 @@ export class AdminSocketClient implements SocketClient {
             return;
           }
           if (name === OBJECT_CHANGE) {
-            const [objId, obj] = (args as [string, IoBrokerObject | null]) ?? [undefined, undefined];
+            const [objId, obj] = (args as [string, IoBrokerObject | null]) ?? [
+              undefined,
+              undefined,
+            ];
             if (typeof objId === 'string') {
               this.dispatchObjectChange(objId, obj ?? null);
             }
@@ -203,7 +220,8 @@ export class AdminSocketClient implements SocketClient {
           reject(
             new UserError(
               `Connection to ioBroker Admin closed before it became ready.`,
-              'Check credentials/auth cookie and that the Admin instance is reachable at ' + this.options.url,
+              'Check credentials/auth cookie and that the Admin instance is reachable at ' +
+                this.options.url,
             ),
           );
           return;

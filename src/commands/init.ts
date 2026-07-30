@@ -92,7 +92,9 @@ async function writeTypesScaffolding(
   const typesPrefix = rel === '' ? '' : `${rel}/`;
 
   if ((await pathExists(tsconfigPath)) && !force) {
-    log.warn(`${tsconfigPath} already exists; leaving it alone. Re-run with --force to replace it.`);
+    log.warn(
+      `${tsconfigPath} already exists; leaving it alone. Re-run with --force to replace it.`,
+    );
   } else {
     await fs.mkdir(scriptRootDir, { recursive: true });
     await fs.writeFile(
@@ -149,7 +151,9 @@ async function probeConnection(
     try {
       const objects = new AdminObjectsApi(socket);
       const [scripts, folders] = await Promise.all([objects.listScripts(), objects.listFolders()]);
-      log.info(`Connected to ${url}: found ${scripts.length} script(s) in ${folders.length} folder(s).`);
+      log.info(
+        `Connected to ${url}: found ${scripts.length} script(s) in ${folders.length} folder(s).`,
+      );
     } finally {
       await socket.close();
     }
@@ -199,7 +203,10 @@ async function ensureGitignored(root: string, log: Logger): Promise<void> {
  * the connection probe, so it can be verified before being offered for saving, and
  * so it never passes through the config-writing path at all.
  */
-async function resolveInteractively(opts: InitOptions, log: Logger): Promise<InitOptions> {
+async function resolveInteractively(
+  opts: InitOptions,
+  log: Logger,
+): Promise<InitOptions & { url: string }> {
   const mayPrompt = (opts.interactive ?? true) && isInteractive();
 
   if (!mayPrompt) {
@@ -209,7 +216,7 @@ async function resolveInteractively(opts: InitOptions, log: Logger): Promise<Ini
         'Pass --url http://<host>:8081, or run in a terminal to be asked for it.',
       );
     }
-    return opts;
+    return { ...opts, url: opts.url };
   }
 
   const filled: InitOptions = { ...opts };
@@ -235,7 +242,7 @@ async function resolveInteractively(opts: InitOptions, log: Logger): Promise<Ini
     filled.username = entered.length > 0 ? entered : undefined;
   }
 
-  return filled;
+  return { ...filled, url: filled.url };
 }
 
 /**
@@ -255,7 +262,7 @@ export async function runInit(cwd: string, rawOpts: InitOptions, log: Logger): P
 
   const opts = await resolveInteractively(rawOpts, log);
 
-  const config = defaultConfig(opts.url as string);
+  const config = defaultConfig(opts.url);
   if (opts.scriptRoot) {
     config.scriptRoot = opts.scriptRoot;
   }

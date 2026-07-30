@@ -9,7 +9,7 @@
 import * as path from 'node:path';
 import { Command } from 'commander';
 
-import { CommandContext, Config, Logger, UserError } from './types';
+import { CommandContext, Logger, UserError } from './types';
 import { loadConfig } from './config';
 import { AdminSocketClient } from './client/socket';
 import { AdminObjectsApi } from './client/objects';
@@ -150,7 +150,7 @@ function action(fn: () => Promise<void>): () => Promise<void> {
   return async () => {
     try {
       await fn();
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof UserError) {
         logger.error(err.message);
         if (err.hint) {
@@ -183,6 +183,12 @@ program
 
 const globals = (): GlobalOptions => program.opts<GlobalOptions>();
 
+/** Working directory for this invocation: `-C <dir>` when given, else the real cwd. */
+function resolveCwd(): string {
+  const dir = globals().cwd;
+  return dir ? path.resolve(dir) : process.cwd();
+}
+
 // --------------------------------------------------------------------------
 // Sync
 // --------------------------------------------------------------------------
@@ -200,7 +206,7 @@ program
   .action(function (this: Command) {
     const opts = this.opts();
     return action(async () => {
-      const cwd = globals().cwd ? path.resolve(globals().cwd!) : process.cwd();
+      const cwd = resolveCwd();
       await runInit(
         cwd,
         {
@@ -224,7 +230,7 @@ program
   // shadowed by the parent and silently never set.
   .action(function (this: Command) {
     return action(async () => {
-      const startDir = globals().cwd ? path.resolve(globals().cwd!) : process.cwd();
+      const startDir = resolveCwd();
       const { config } = await loadConfig(startDir);
       await login(config, { passwordStdin: globals().passwordStdin }, logger);
     })();
@@ -235,7 +241,7 @@ program
   .description('remove the stored password for this instance')
   .action(function (this: Command) {
     return action(async () => {
-      const startDir = globals().cwd ? path.resolve(globals().cwd!) : process.cwd();
+      const startDir = resolveCwd();
       const { config } = await loadConfig(startDir);
       await logout(config, logger);
     })();
@@ -248,7 +254,9 @@ program
   .option('-f, --force', 'overwrite local changes and conflicts')
   .action(function (this: Command, pattern: string | undefined) {
     const opts = this.opts();
-    return action(() => withContext(globals(), (ctx) => pull(ctx, { pattern, force: opts.force })))();
+    return action(() =>
+      withContext(globals(), (ctx) => pull(ctx, { pattern, force: opts.force })),
+    )();
   });
 
 program
@@ -258,7 +266,9 @@ program
   .option('-f, --force', 'push even when the server also changed (conflict)')
   .action(function (this: Command, pattern: string | undefined) {
     const opts = this.opts();
-    return action(() => withContext(globals(), (ctx) => push(ctx, { pattern, force: opts.force })))();
+    return action(() =>
+      withContext(globals(), (ctx) => push(ctx, { pattern, force: opts.force })),
+    )();
   });
 
 program
@@ -275,10 +285,15 @@ program
   .command('diff')
   .description('unified diff of local vs server')
   .argument('[pattern]', 'only scripts matching this glob')
-  .option('-a, --against <snapshot>', 'diff against a backup snapshot instead of the server ("latest" allowed)')
+  .option(
+    '-a, --against <snapshot>',
+    'diff against a backup snapshot instead of the server ("latest" allowed)',
+  )
   .action(function (this: Command, pattern: string | undefined) {
     const opts = this.opts();
-    return action(() => withContext(globals(), (ctx) => diff(ctx, { pattern, against: opts.against })))();
+    return action(() =>
+      withContext(globals(), (ctx) => diff(ctx, { pattern, against: opts.against })),
+    )();
   });
 
 program
@@ -391,7 +406,9 @@ program
   .option('-y, --yes', 'actually perform the rename')
   .action(function (this: Command, id: string, newName: string) {
     const opts = this.opts();
-    return action(() => withContext(globals(), (ctx) => rename(ctx, id, newName, { yes: opts.yes })))();
+    return action(() =>
+      withContext(globals(), (ctx) => rename(ctx, id, newName, { yes: opts.yes })),
+    )();
   });
 
 program
@@ -402,7 +419,9 @@ program
   .option('-y, --yes', 'actually perform the move')
   .action(function (this: Command, id: string, folder: string) {
     const opts = this.opts();
-    return action(() => withContext(globals(), (ctx) => move(ctx, id, folder, { yes: opts.yes })))();
+    return action(() =>
+      withContext(globals(), (ctx) => move(ctx, id, folder, { yes: opts.yes })),
+    )();
   });
 
 program
@@ -415,11 +434,13 @@ program
   .action(function (this: Command, id: string) {
     const opts = this.opts();
     return action(() =>
-      withContext(globals(), (ctx) => remove(ctx, id, { yes: opts.yes, deleteLocal: opts.deleteLocal })),
+      withContext(globals(), (ctx) =>
+        remove(ctx, id, { yes: opts.yes, deleteLocal: opts.deleteLocal }),
+      ),
     )();
   });
 
-program.parseAsync(process.argv).catch((err) => {
+program.parseAsync(process.argv).catch((err: unknown) => {
   logger.error(err instanceof Error ? err.message : String(err));
   process.exitCode = 1;
 });

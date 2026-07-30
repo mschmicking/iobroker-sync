@@ -30,7 +30,8 @@ export type EngineType = (typeof ENGINE_TYPES)[keyof typeof ENGINE_TYPES];
  * (folder objects created by the Admin UI use the map form). Always narrow with
  * `resolveName()` from sync/mapping.ts rather than assuming a string.
  */
-export type MultilingualName = string | { en?: string; de?: string; [lang: string]: string | undefined };
+export type MultilingualName =
+  string | { en?: string; de?: string; [lang: string]: string | undefined };
 
 /** Access control list as returned by the server. Treated as opaque; never written by us. */
 export interface ObjectAcl {
@@ -93,7 +94,7 @@ export type IoBrokerObject = ScriptObject | FolderObject;
 
 /** Shape of a `getObjectView` reply. */
 export interface ObjectViewResult<T> {
-  rows: Array<{ id: string; value: T }>;
+  rows: { id: string; value: T }[];
 }
 
 // ---------------------------------------------------------------------------

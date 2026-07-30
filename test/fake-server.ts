@@ -61,12 +61,21 @@ function ensureTlsFixture(): { key: Buffer; cert: Buffer } | null {
       execFileSync(
         'openssl',
         [
-          'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-          '-days', '7300',
-          '-subj', '/CN=localhost',
-          '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
-          '-keyout', keyPath,
-          '-out', certPath,
+          'req',
+          '-x509',
+          '-newkey',
+          'rsa:2048',
+          '-nodes',
+          '-days',
+          '7300',
+          '-subj',
+          '/CN=localhost',
+          '-addext',
+          'subjectAltName=DNS:localhost,IP:127.0.0.1',
+          '-keyout',
+          keyPath,
+          '-out',
+          certPath,
         ],
         { stdio: 'ignore' },
       );
@@ -82,6 +91,13 @@ function ensureTlsFixture(): { key: Buffer; cert: Buffer } | null {
 }
 
 type Frame = [number, (number | null)?, string?, unknown?];
+
+/** Mirrors the client's handling: RawData may be a Buffer, ArrayBuffer or Buffer[]. */
+function rawDataToString(data: WebSocket.RawData): string {
+  if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
+  if (Buffer.isBuffer(data)) return data.toString('utf8');
+  return Buffer.from(data).toString('utf8');
+}
 
 /**
  * How the fake instance answers the HTTP auth probes in `src/client/auth.ts`.
@@ -107,7 +123,10 @@ export interface RecordedRequest {
 }
 
 /** Deep-merge `src` into `dest`, mirroring the real server's `extendObject` behaviour. */
-function deepMerge(dest: Record<string, unknown>, src: Record<string, unknown>): Record<string, unknown> {
+function deepMerge(
+  dest: Record<string, unknown>,
+  src: Record<string, unknown>,
+): Record<string, unknown> {
   for (const key of Object.keys(src)) {
     const srcVal = src[key];
     const destVal = dest[key];
@@ -125,11 +144,6 @@ function deepMerge(dest: Record<string, unknown>, src: Record<string, unknown>):
     }
   }
   return dest;
-}
-
-function matchPattern(pattern: string, id: string): boolean {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-  return new RegExp(`^${escaped}$`).test(id);
 }
 
 export class FakeAdminServer {
@@ -365,12 +379,7 @@ export class FakeAdminServer {
    * Pushes a log line to every connected client, as the real server does after a
    * `subscribe(['log'])`. Shape mirrors ioBroker's log objects.
    */
-  emitLog(entry: {
-    message: string;
-    severity?: string;
-    from?: string;
-    ts?: number;
-  }): void {
+  emitLog(entry: { message: string; severity?: string; from?: string; ts?: number }): void {
     const payload = {
       message: entry.message,
       severity: entry.severity ?? 'info',
@@ -417,7 +426,7 @@ export class FakeAdminServer {
   private handleMessage(ws: WebSocket, data: WebSocket.RawData): void {
     let frame: Frame;
     try {
-      frame = JSON.parse(data.toString());
+      frame = JSON.parse(rawDataToString(data));
     } catch {
       return;
     }
@@ -468,7 +477,11 @@ export class FakeAdminServer {
 
     switch (name) {
       case 'getObjectView': {
-        const [, viewType, range] = args as [string, string, { startkey?: string; endkey?: string }];
+        const [, viewType, range] = args as [
+          string,
+          string,
+          { startkey?: string; endkey?: string },
+        ];
         const { startkey = '', endkey = '￿' } = range ?? {};
         const rows = Array.from(this.objects.values())
           .filter((obj) => obj.type === viewType)
@@ -502,7 +515,7 @@ export class FakeAdminServer {
       case 'extendObject': {
         const [objId, partial] = args as [string, Partial<IoBrokerObject>];
         const existing = this.objects.get(objId) ?? ({ _id: objId } as IoBrokerObject);
-        const merged = deepMerge({ ...existing }, partial as Record<string, unknown>) as unknown as IoBrokerObject;
+        const merged = deepMerge({ ...existing }, partial) as unknown as IoBrokerObject;
         merged._id = objId;
         this.objects.set(objId, merged);
         this.reply(ws, id, null, null);

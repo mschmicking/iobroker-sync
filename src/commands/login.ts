@@ -27,7 +27,9 @@ export async function login(config: Config, opts: LoginOptions, log: Logger): Pr
       throw new UserError('--password-stdin was given but nothing was read from stdin.');
     }
   } else if (isInteractive()) {
-    password = await promptPassword(`Password for ${config.username ?? 'ioBroker'} at ${config.url}`);
+    password = await promptPassword(
+      `Password for ${config.username ?? 'ioBroker'} at ${config.url}`,
+    );
     if (!password) throw new UserError('No password entered.');
   } else {
     throw new UserError(

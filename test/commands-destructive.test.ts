@@ -200,7 +200,11 @@ describe('destructive commands', () => {
     await t.close();
 
     assert.ok(server.getObject('script.js.common.target'), 'original must survive');
-    assert.deepEqual(await listTrash(project.root), [], 'nothing was deleted, so nothing to back up');
+    assert.deepEqual(
+      await listTrash(project.root),
+      [],
+      'nothing was deleted, so nothing to back up',
+    );
   });
 
   /**
@@ -225,7 +229,11 @@ describe('destructive commands', () => {
     const original = server.getObject('script.js.common.target') as ScriptObject | null;
     assert.ok(original, 'ORIGINAL MUST STILL EXIST after a failed verification');
     assert.equal(original.common.source, SOURCE, 'original source must be untouched');
-    assert.deepEqual(await listTrash(project.root), [], 'must not have reached the backup/delete step');
+    assert.deepEqual(
+      await listTrash(project.root),
+      [],
+      'must not have reached the backup/delete step',
+    );
     assert.ok(await localExists(project, 'common/target.ts'), 'local file untouched');
   });
 
@@ -233,7 +241,10 @@ describe('destructive commands', () => {
     server.corruptNextSetObject(() => null as unknown as ScriptObject);
 
     const t = await makeContext(port, project);
-    await assert.rejects(() => rename(t.ctx, 'script.js.common.target', 'renamed', { yes: true }), UserError);
+    await assert.rejects(
+      () => rename(t.ctx, 'script.js.common.target', 'renamed', { yes: true }),
+      UserError,
+    );
     await t.close();
 
     const original = server.getObject('script.js.common.target') as ScriptObject | null;

@@ -160,7 +160,10 @@ describe('getAuthCookie', () => {
     server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
     await saveStoredPassword(url, 'admin', 'secret');
 
-    assert.equal(await getAuthCookie(url, 'admin', false, NO_PROMPT), 'access_token=fake-oauth-token');
+    assert.equal(
+      await getAuthCookie(url, 'admin', false, NO_PROMPT),
+      'access_token=fake-oauth-token',
+    );
   });
 
   it('prefers IOBROKER_PASSWORD over the saved password', async () => {
@@ -168,7 +171,10 @@ describe('getAuthCookie', () => {
     await saveStoredPassword(url, 'admin', 'stale-saved-password');
     process.env.IOBROKER_PASSWORD = 'from-env';
 
-    assert.equal(await getAuthCookie(url, 'admin', false, NO_PROMPT), 'access_token=fake-oauth-token');
+    assert.equal(
+      await getAuthCookie(url, 'admin', false, NO_PROMPT),
+      'access_token=fake-oauth-token',
+    );
   });
 
   it('points at `login` when a saved password has gone stale', async () => {
@@ -202,7 +208,7 @@ describe('getAuthCookie', () => {
 
     assert.ok(err, 'expected the bad password to be rejected');
     assert.ok(!err.message.includes(password), 'the message must not contain the password');
-    assert.ok(!String((err as UserError).hint ?? '').includes(password), 'nor the hint');
+    assert.ok(!((err as UserError).hint ?? '').includes(password), 'nor the hint');
     assert.ok(
       logged.every((l) => !l.includes(password)),
       `no log line may contain the password, got ${JSON.stringify(logged)}`,

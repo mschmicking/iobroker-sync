@@ -25,93 +25,97 @@ const NO_PROMPT = { allowPrompt: false } as const;
 
 // openssl generates the certificate on first run; without it these are skipped
 // rather than failing, so a contributor without openssl still gets a green suite.
-describe('getAuthCookie over https with a self-signed certificate', { skip: tlsFixtureAvailable() ? false : 'openssl not available' }, () => {
-  let server: FakeAdminServer;
-  let url: string;
-  let project: TempProject;
-  let previousStore: string | undefined;
+describe(
+  'getAuthCookie over https with a self-signed certificate',
+  { skip: tlsFixtureAvailable() ? false : 'openssl not available' },
+  () => {
+    let server: FakeAdminServer;
+    let url: string;
+    let project: TempProject;
+    let previousStore: string | undefined;
 
-  before(async () => {
-    server = new FakeAdminServer();
-    url = `https://127.0.0.1:${await server.start(0, { tls: true })}`;
-  });
+    before(async () => {
+      server = new FakeAdminServer();
+      url = `https://127.0.0.1:${await server.start(0, { tls: true })}`;
+    });
 
-  after(async () => {
-    await server.stop();
-  });
+    after(async () => {
+      await server.stop();
+    });
 
-  beforeEach(async () => {
-    server.reset();
-    delete process.env.IOBROKER_PASSWORD;
-    project = await makeTempProject();
-    previousStore = process.env.IOBROKER_SYNC_CREDENTIALS;
-    process.env.IOBROKER_SYNC_CREDENTIALS = path.join(project.root, 'credentials.json');
-  });
+    beforeEach(async () => {
+      server.reset();
+      delete process.env.IOBROKER_PASSWORD;
+      project = await makeTempProject();
+      previousStore = process.env.IOBROKER_SYNC_CREDENTIALS;
+      process.env.IOBROKER_SYNC_CREDENTIALS = path.join(project.root, 'credentials.json');
+    });
 
-  afterEach(async () => {
-    if (previousStore === undefined) delete process.env.IOBROKER_SYNC_CREDENTIALS;
-    else process.env.IOBROKER_SYNC_CREDENTIALS = previousStore;
-    await project.cleanup();
-  });
+    afterEach(async () => {
+      if (previousStore === undefined) delete process.env.IOBROKER_SYNC_CREDENTIALS;
+      else process.env.IOBROKER_SYNC_CREDENTIALS = previousStore;
+      await project.cleanup();
+    });
 
-  it('logs in via OAuth2 when allowSelfSigned is set', async () => {
-    server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
-    process.env.IOBROKER_PASSWORD = 'secret';
+    it('logs in via OAuth2 when allowSelfSigned is set', async () => {
+      server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
+      process.env.IOBROKER_PASSWORD = 'secret';
 
-    const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
+      const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
 
-    assert.equal(cookie, 'access_token=fake-oauth-token');
-  });
+      assert.equal(cookie, 'access_token=fake-oauth-token');
+    });
 
-  it('logs in via the legacy endpoint when allowSelfSigned is set', async () => {
-    server.auth = { mode: 'legacy', username: 'admin', password: 'secret' };
-    process.env.IOBROKER_PASSWORD = 'secret';
+    it('logs in via the legacy endpoint when allowSelfSigned is set', async () => {
+      server.auth = { mode: 'legacy', username: 'admin', password: 'secret' };
+      process.env.IOBROKER_PASSWORD = 'secret';
 
-    const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
+      const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
 
-    assert.equal(cookie, 'connect.sid=fake-session-id');
-  });
+      assert.equal(cookie, 'connect.sid=fake-session-id');
+    });
 
-  it('detects auth-disabled over https too', async () => {
-    server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
+    it('detects auth-disabled over https too', async () => {
+      server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
 
-    assert.equal(await getAuthCookie(url, null, true, NO_PROMPT), undefined);
-  });
+      assert.equal(await getAuthCookie(url, null, true, NO_PROMPT), undefined);
+    });
 
-  it('refuses an untrusted certificate when allowSelfSigned is not set', async () => {
-    server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
-    process.env.IOBROKER_PASSWORD = 'secret';
+    it('refuses an untrusted certificate when allowSelfSigned is not set', async () => {
+      server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
+      process.env.IOBROKER_PASSWORD = 'secret';
 
-    await assert.rejects(
-      () => getAuthCookie(url, 'admin', false, NO_PROMPT),
-      (err: unknown) => {
-        assert.ok(err instanceof UserError);
-        assert.match(err.message, /could not reach/i);
-        return true;
-      },
-    );
-  });
+      await assert.rejects(
+        () => getAuthCookie(url, 'admin', false, NO_PROMPT),
+        (err: unknown) => {
+          assert.ok(err instanceof UserError);
+          assert.match(err.message, /could not reach/i);
+          return true;
+        },
+      );
+    });
 
-  it('tells the user exactly which setting fixes an untrusted certificate', async () => {
-    server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
-    process.env.IOBROKER_PASSWORD = 'secret';
+    it('tells the user exactly which setting fixes an untrusted certificate', async () => {
+      server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
+      process.env.IOBROKER_PASSWORD = 'secret';
 
-    // A raw TLS error here is close to unactionable; the hint has to name the flag.
-    const err = (await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(
-      (e: unknown) => e,
-    )) as UserError;
+      // A raw TLS error here is close to unactionable; the hint has to name the flag.
+      const err = (await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(
+        (e: unknown) => e,
+      )) as UserError;
 
-    assert.match(String(err.hint), /allowSelfSigned/);
-  });
+      assert.match(String(err.hint), /allowSelfSigned/);
+    });
 
-  it('never sends the password when the certificate is rejected', async () => {
-    server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
-    process.env.IOBROKER_PASSWORD = 'secret';
+    it('never sends the password when the certificate is rejected', async () => {
+      server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
+      process.env.IOBROKER_PASSWORD = 'secret';
 
-    await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(() => undefined);
+      await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(() => undefined);
 
-    // The handshake fails before any request body is written, so the server must
-    // not have seen a credential at all.
-    assert.deepEqual(server.httpRequests, [], 'nothing may reach an untrusted server');
-  });
-});
+      // The handshake fails before any request body is written, so the server must
+      // not have seen a credential at all.
+      assert.deepEqual(server.httpRequests, [], 'nothing may reach an untrusted server');
+    });
+  },
+);

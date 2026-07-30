@@ -81,9 +81,7 @@ export async function backup(
 
   if (scripts.length === 0) {
     throw new UserError(
-      opts.pattern
-        ? `No scripts matched "${opts.pattern}".`
-        : 'No scripts found on the server.',
+      opts.pattern ? `No scripts matched "${opts.pattern}".` : 'No scripts found on the server.',
       'Run `iob-sync list` to see what is there.',
     );
   }

@@ -1,0 +1,49 @@
+name: PR title
+
+# The PR title becomes the squashed commit message, and release-please derives the
+# next version from it. A title that does not parse means a release that silently
+# does not happen, so it is validated before merge rather than discovered after.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # feat -> minor, fix/perf -> patch, feat! or a BREAKING CHANGE footer -> major.
+          # The rest are patch-or-nothing and never drive a release on their own.
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+          # Optional, but keep the vocabulary small so it stays meaningful.
+          scopes: |
+            sync
+            auth
+            watch
+            logs
+            json
+            cli
+            deps
+            docs
+          requireScope: false
+          # Subject should read like a sentence fragment, lower-case, no full stop.
+          subjectPattern: ^(?![A-Z])(?!.*\.$).+$
+          subjectPatternError: |
+            The subject "{subject}" is invalid: start lower-case and omit the trailing
+            full stop, e.g. "feat(logs): stream the server log".

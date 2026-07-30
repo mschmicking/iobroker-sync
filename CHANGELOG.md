@@ -21,7 +21,7 @@ for the first release.
   than the server. `latest` resolves to the newest.
 - `login` / `logout` — save or remove the password for an instance. Verified against the
   live server before saving.
-- `backup` — read-only snapshot of every script's source *and* full object, since `push`
+- `backup` — read-only snapshot of every script's source _and_ full object, since `push`
   cannot restore `common.enabled` or `common.engine`.
 - Interactive `init`, which asks for URL, certificate handling, script root and username
   when run without flags, and adds `.iobroker-sync/` to `.gitignore`.
@@ -43,7 +43,7 @@ for the first release.
 - `watch` dropped edits saved before chokidar finished its initial scan. It now waits for
   the watcher to be ready before reporting that it is watching.
 - `watch` could re-pull its own push. The hash used to suppress the javascript adapter's
-  `compiled`/`sourceHash` echo was recorded *after* the server write, so an echo arriving
+  `compiled`/`sourceHash` echo was recorded _after_ the server write, so an echo arriving
   mid-write escaped the guard.
 - `login --password-stdin` always reported "no terminal available". The option was
   declared both globally and on the subcommand, and the parent silently shadowed the

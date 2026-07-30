@@ -37,7 +37,10 @@ describe('AdminSocketClient: connect', () => {
   test('rejects when ___ready___ never arrives before the connect timeout', async () => {
     await withServer(async (server, port) => {
       server.readyDelayMs = 400;
-      const client = new AdminSocketClient({ url: `http://localhost:${port}`, connectTimeoutMs: 100 });
+      const client = new AdminSocketClient({
+        url: `http://localhost:${port}`,
+        connectTimeoutMs: 100,
+      });
       try {
         await assert.rejects(() => client.connect(), /Timed out waiting/);
         assert.equal(client.connected, false);
@@ -93,7 +96,10 @@ describe('AdminSocketClient: emit', () => {
 
   test('request timeout rejects and does not leak the pending entry', async () => {
     await withServer(async (server, port) => {
-      const client = new AdminSocketClient({ url: `http://localhost:${port}`, requestTimeoutMs: 80 });
+      const client = new AdminSocketClient({
+        url: `http://localhost:${port}`,
+        requestTimeoutMs: 80,
+      });
       try {
         await client.connect();
         server.delayCommand('getObject', 300);
@@ -135,14 +141,18 @@ describe('AdminSocketClient: subscribeObjects', () => {
       const client = new AdminSocketClient({ url: `http://localhost:${port}` });
       try {
         await client.connect();
-        const received: Array<{ id: string; obj: unknown }> = [];
+        const received: { id: string; obj: unknown }[] = [];
         await client.subscribeObjects('script.js.common.*', (id, obj) => {
           received.push({ id, obj });
         });
 
-        server.emitObjectChange('script.js.common.garage', { _id: 'script.js.common.garage' } as never);
+        server.emitObjectChange('script.js.common.garage', {
+          _id: 'script.js.common.garage',
+        } as never);
         server.emitObjectChange('script.js.Rollos', { _id: 'script.js.Rollos' } as never);
-        server.emitObjectChange('script.js.Switch-Musiccast', { _id: 'script.js.Switch-Musiccast' } as never);
+        server.emitObjectChange('script.js.Switch-Musiccast', {
+          _id: 'script.js.Switch-Musiccast',
+        } as never);
         await sleep(100);
 
         assert.equal(received.length, 1);
@@ -157,7 +167,10 @@ describe('AdminSocketClient: subscribeObjects', () => {
 describe('AdminSocketClient: close', () => {
   test('resolves and rejects in-flight requests', async () => {
     await withServer(async (server, port) => {
-      const client = new AdminSocketClient({ url: `http://localhost:${port}`, requestTimeoutMs: 5000 });
+      const client = new AdminSocketClient({
+        url: `http://localhost:${port}`,
+        requestTimeoutMs: 5000,
+      });
       await client.connect();
       server.delayCommand('getObject', 5000);
       const pending = client.emit('getObject', ['script.js.common.garage']);
@@ -174,7 +187,11 @@ describe('AdminSocketClient: reconnection regression', () => {
     const server = new FakeAdminServer();
     server.seed(defaultSeed());
     const port = await server.start();
-    const client = new AdminSocketClient({ url: `http://localhost:${port}`, connectTimeoutMs: 1000, requestTimeoutMs: 1000 });
+    const client = new AdminSocketClient({
+      url: `http://localhost:${port}`,
+      connectTimeoutMs: 1000,
+      requestTimeoutMs: 1000,
+    });
     try {
       await client.connect();
       assert.equal(client.connected, true);

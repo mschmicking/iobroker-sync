@@ -22,7 +22,10 @@ describe('resolveWithinRoot', () => {
     try {
       assert.throws(() => resolveWithinRoot(project.scriptRoot, '../../../etc/passwd'), UserError);
       assert.throws(() => resolveWithinRoot(project.scriptRoot, '../outside.js'), UserError);
-      assert.throws(() => resolveWithinRoot(project.scriptRoot, 'a/../../../outside.js'), UserError);
+      assert.throws(
+        () => resolveWithinRoot(project.scriptRoot, 'a/../../../outside.js'),
+        UserError,
+      );
     } finally {
       await project.cleanup();
     }
@@ -63,7 +66,10 @@ describe('safeWriteFile', () => {
       const victim = path.join(project.root, 'outside.js');
       await fs.writeFile(victim, 'ORIGINAL');
 
-      await assert.rejects(() => safeWriteFile(project.scriptRoot, '../outside.js', 'PWNED'), UserError);
+      await assert.rejects(
+        () => safeWriteFile(project.scriptRoot, '../outside.js', 'PWNED'),
+        UserError,
+      );
       assert.equal(await fs.readFile(victim, 'utf8'), 'ORIGINAL');
     } finally {
       await project.cleanup();
@@ -77,7 +83,10 @@ describe('safeWriteFile', () => {
       await fs.writeFile(victim, 'ORIGINAL CONTENT');
       await fs.symlink(victim, path.join(project.scriptRoot, 'foo.js'));
 
-      await assert.rejects(() => safeWriteFile(project.scriptRoot, 'foo.js', 'OVERWRITTEN'), UserError);
+      await assert.rejects(
+        () => safeWriteFile(project.scriptRoot, 'foo.js', 'OVERWRITTEN'),
+        UserError,
+      );
       assert.equal(await fs.readFile(victim, 'utf8'), 'ORIGINAL CONTENT');
     } finally {
       await project.cleanup();

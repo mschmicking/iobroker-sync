@@ -30,9 +30,7 @@ export async function stop(ctx: CommandContext, opts: { pattern?: string }): Pro
     ctx.log.info(`Skipped ${skipped} already stopped.`);
   }
 
-  ctx.log.result(
-    `Stopped ${stopped} script${stopped === 1 ? '' : 's'}.`,
-  );
+  ctx.log.result(`Stopped ${stopped} script${stopped === 1 ? '' : 's'}.`);
 }
 
 export async function restart(ctx: CommandContext, opts: { pattern?: string }): Promise<void> {
@@ -53,7 +51,5 @@ export async function restart(ctx: CommandContext, opts: { pattern?: string }): 
     ctx.log.result(`restart ${script._id}`);
   }
 
-  ctx.log.result(
-    `Restarted ${scripts.length} script${scripts.length === 1 ? '' : 's'}.`,
-  );
+  ctx.log.result(`Restarted ${scripts.length} script${scripts.length === 1 ? '' : 's'}.`);
 }

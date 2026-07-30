@@ -68,8 +68,8 @@ describe('AdminObjectsApi: getScript', () => {
     await withApi(async (api) => {
       const result = await api.getScript('script.js.common.garage');
       assert.ok(result);
-      assert.equal(result!._id, 'script.js.common.garage');
-      assert.equal(result!.type, 'script');
+      assert.equal(result._id, 'script.js.common.garage');
+      assert.equal(result.type, 'script');
     });
   });
 });
@@ -178,9 +178,9 @@ describe('AdminObjectsApi: ensureFolders', () => {
       const folderA = server.getObject('script.js.a');
       const folderAB = server.getObject('script.js.a.b');
       assert.ok(folderA);
-      assert.equal(folderA!.type, 'channel');
+      assert.equal(folderA.type, 'channel');
       assert.ok(folderAB);
-      assert.equal(folderAB!.type, 'channel');
+      assert.equal(folderAB.type, 'channel');
       // The script id itself must never be created by ensureFolders.
       assert.equal(server.getObject('script.js.a.b.c'), null);
 

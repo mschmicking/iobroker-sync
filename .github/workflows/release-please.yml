@@ -1,0 +1,27 @@
+name: Release PR
+
+# Maintains an open "chore(main): release x.y.z" pull request that accumulates every
+# merged change, derives the next version from the conventional-commit history, and
+# rewrites CHANGELOG.md. Nothing is versioned or tagged until that PR is merged.
+#
+# Chosen over fully automatic publishing on purpose: releasing is irreversible on npm,
+# so there is a human gate. Merging the release PR tags the commit; the actual
+# `npm publish` stays in release.yml, which is manual.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          release-type: node
+          # Keeps the existing hand-written CHANGELOG entries intact by appending
+          # below the header rather than replacing the file.
+          changelog-notes-type: default

@@ -43,9 +43,16 @@ function formatEntry(status: SyncStatus): string {
 }
 
 export async function status(ctx: CommandContext, opts: StatusOptions): Promise<void> {
-  const manifest = await loadManifest(ctx.root);
-  const [local, remoteScan] = await Promise.all([scanLocal(ctx.scriptRoot), scanRemote(ctx.objects)]);
-  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) => matches(s, opts.pattern));
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
+  const [local, remoteScan] = await Promise.all([
+    scanLocal(ctx.scriptRoot),
+    scanRemote(ctx.objects),
+  ]);
+  const statuses = computeStatus({ manifest, remote: remoteScan.info, local }).filter((s) =>
+    matches(s, opts.pattern),
+  );
 
   const groups = new Map<SyncState, SyncStatus[]>();
   for (const state of GROUP_ORDER) groups.set(state, []);

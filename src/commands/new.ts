@@ -1,4 +1,3 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { CommandContext, UserError, ManifestEntry, ENGINE_TYPES } from '../types';
 import { relPathToId, extensionToEngineType, hashSource } from '../sync/mapping';
@@ -23,9 +22,7 @@ export async function createNew(
       })
       .filter((e) => e.length > 0)
       .join(', ');
-    throw new UserError(
-      `Unknown file extension in "${relPath}". Expected one of: ${validExts}`,
-    );
+    throw new UserError(`Unknown file extension in "${relPath}". Expected one of: ${validExts}`);
   }
 
   // Derive ioBroker id from relPath
@@ -88,7 +85,9 @@ export async function createNew(
 
   // Add manifest entry
   if (!ctx.dryRun) {
-    const manifest = await loadManifest(ctx.root);
+    const manifest = await loadManifest(ctx.root, (m) => {
+      ctx.log.warn(m);
+    });
     const entry: ManifestEntry = {
       id,
       path: relPath,

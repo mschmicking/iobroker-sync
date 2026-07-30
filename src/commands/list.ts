@@ -1,5 +1,5 @@
 import { CommandContext, ScriptObject } from '../types';
-import { idToRelPath, resolveName } from '../sync/mapping';
+import { idToRelPath } from '../sync/mapping';
 import { matchesPattern } from '../sync/scan';
 
 /**
@@ -33,13 +33,13 @@ export async function list(ctx: CommandContext, opts: { pattern?: string }): Pro
   }
 
   // Build table rows
-  type Row = {
+  interface Row {
     enabled: string;
     id: string;
     engine: string;
     engineType: string;
     path: string;
-  };
+  }
 
   const rows: Row[] = scripts.map((script) => {
     const relPath = idToRelPath(script._id, script.common.engineType || '');

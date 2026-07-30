@@ -125,7 +125,11 @@ async function assertParentDirWithinRoot(root: string, absPath: string): Promise
  * Writes a file inside `root`, refusing anything that escapes the tree either by
  * path traversal or by following a symlink.
  */
-export async function safeWriteFile(root: string, relPath: string, content: string): Promise<string> {
+export async function safeWriteFile(
+  root: string,
+  relPath: string,
+  content: string,
+): Promise<string> {
   const abs = resolveWithinRoot(root, relPath);
 
   if (await isSymlink(abs)) {

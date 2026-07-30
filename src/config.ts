@@ -69,16 +69,28 @@ function assertValidConfig(parsed: unknown, sourcePath: string): Config {
     throw new UserError(`Config file "${sourcePath}" is missing a valid "url" string.`, INIT_HINT);
   }
   if (typeof scriptRoot !== 'string' || scriptRoot.length === 0) {
-    throw new UserError(`Config file "${sourcePath}" is missing a valid "scriptRoot" string.`, INIT_HINT);
+    throw new UserError(
+      `Config file "${sourcePath}" is missing a valid "scriptRoot" string.`,
+      INIT_HINT,
+    );
   }
   if (typeof allowSelfSigned !== 'boolean') {
-    throw new UserError(`Config file "${sourcePath}" is missing a valid "allowSelfSigned" boolean.`, INIT_HINT);
+    throw new UserError(
+      `Config file "${sourcePath}" is missing a valid "allowSelfSigned" boolean.`,
+      INIT_HINT,
+    );
   }
   if (username !== null && typeof username !== 'string') {
-    throw new UserError(`Config file "${sourcePath}" has an invalid "username" (must be a string or null).`, INIT_HINT);
+    throw new UserError(
+      `Config file "${sourcePath}" has an invalid "username" (must be a string or null).`,
+      INIT_HINT,
+    );
   }
   if (typeof defaultInstance !== 'string' || defaultInstance.length === 0) {
-    throw new UserError(`Config file "${sourcePath}" is missing a valid "defaultInstance" string.`, INIT_HINT);
+    throw new UserError(
+      `Config file "${sourcePath}" is missing a valid "defaultInstance" string.`,
+      INIT_HINT,
+    );
   }
 
   validateUrl(url);
@@ -108,7 +120,10 @@ export async function loadConfig(startDir: string): Promise<{ root: string; conf
       try {
         parsed = JSON.parse(raw);
       } catch (err) {
-        throw new UserError(`Could not parse "${candidate}" as JSON: ${(err as Error).message}`, INIT_HINT);
+        throw new UserError(
+          `Could not parse "${candidate}" as JSON: ${(err as Error).message}`,
+          INIT_HINT,
+        );
       }
 
       const config = assertValidConfig(parsed, candidate);

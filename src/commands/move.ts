@@ -39,7 +39,10 @@ export async function move(
 ): Promise<void> {
   const original = await ctx.objects.getScript(id);
   if (!original) {
-    throw new UserError(`Script "${id}" was not found.`, 'Run `iob-sync list` to see available ids.');
+    throw new UserError(
+      `Script "${id}" was not found.`,
+      'Run `iob-sync list` to see available ids.',
+    );
   }
 
   const scriptName = id.split('.').pop();
@@ -56,7 +59,10 @@ export async function move(
   }
 
   if (await ctx.objects.getScript(newId)) {
-    throw new UserError(`Script "${newId}" already exists.`, 'Move it elsewhere or rename it first.');
+    throw new UserError(
+      `Script "${newId}" already exists.`,
+      'Move it elsewhere or rename it first.',
+    );
   }
 
   if (!opts.yes) {
@@ -80,7 +86,9 @@ export async function move(
   await copyVerifyAndDelete(ctx, original, newId);
   ctx.log.result(`move     ${id} -> ${newId}`);
 
-  const manifest = await loadManifest(ctx.root);
+  const manifest = await loadManifest(ctx.root, (m) => {
+    ctx.log.warn(m);
+  });
   const entry = manifest.entries[id];
   if (entry) {
     const oldLocalPath = path.join(ctx.scriptRoot, entry.path);

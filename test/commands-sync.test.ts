@@ -106,7 +106,7 @@ describe('sync commands', () => {
     await t.close();
 
     assert.ok(
-      t.captured.all.some((l) => /0 pulled/.test(l)),
+      t.captured.all.some((l) => l.includes('0 pulled')),
       `second pull should write nothing, got: ${t.captured.all.join(' | ')}`,
     );
   });
@@ -183,8 +183,16 @@ describe('sync commands', () => {
     await pull(t.ctx, {});
     await t.close();
 
-    assert.equal(await readLocal(project, 'rooted.js'), JS_SOURCE, 'the unaffected script must still pull');
-    assert.equal(await fs.readFile(outsideFile, 'utf8'), 'ORIGINAL', 'the symlink target must be untouched');
+    assert.equal(
+      await readLocal(project, 'rooted.js'),
+      JS_SOURCE,
+      'the unaffected script must still pull',
+    );
+    assert.equal(
+      await fs.readFile(outsideFile, 'utf8'),
+      'ORIGINAL',
+      'the symlink target must be untouched',
+    );
     assert.ok(
       t.captured.all.some((l) => /skipped/i.test(l) && /garage/i.test(l)),
       `the failure must be reported, got: ${t.captured.all.join(' | ')}`,

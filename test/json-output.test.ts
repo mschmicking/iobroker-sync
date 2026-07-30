@@ -30,7 +30,11 @@ const ID = 'script.js.common.garage';
 const REL = 'common/garage.ts';
 const SOURCE = "log('hi');\n";
 
-function script(id: string, source = SOURCE, overrides: Partial<ScriptObject['common']> = {}): ScriptObject {
+function script(
+  id: string,
+  source = SOURCE,
+  overrides: Partial<ScriptObject['common']> = {},
+): ScriptObject {
   return {
     _id: id,
     type: 'script',

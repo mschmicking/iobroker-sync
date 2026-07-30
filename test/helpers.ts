@@ -45,12 +45,10 @@ export function makeCapturingLogger(): { log: Logger; captured: CapturedLog } {
     all: [],
     data: [],
   };
-  const push =
-    (bucket: Exclude<keyof CapturedLog, 'all' | 'data'>) =>
-    (msg: string) => {
-      captured[bucket].push(msg);
-      captured.all.push(msg);
-    };
+  const push = (bucket: Exclude<keyof CapturedLog, 'all' | 'data'>) => (msg: string) => {
+    captured[bucket].push(msg);
+    captured.all.push(msg);
+  };
   return {
     captured,
     log: {
@@ -139,7 +137,11 @@ export async function makeContext(
 // Local file / manifest fixtures
 // ---------------------------------------------------------------------------
 
-export async function writeLocal(project: TempProject, relPath: string, content: string): Promise<void> {
+export async function writeLocal(
+  project: TempProject,
+  relPath: string,
+  content: string,
+): Promise<void> {
   const full = path.join(project.scriptRoot, relPath);
   await fs.mkdir(path.dirname(full), { recursive: true });
   await fs.writeFile(full, content, 'utf8');

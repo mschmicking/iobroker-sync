@@ -26,7 +26,11 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-async function walk(dir: string, scriptRoot: string, out: Map<string, LocalFileInfo>): Promise<void> {
+async function walk(
+  dir: string,
+  scriptRoot: string,
+  out: Map<string, LocalFileInfo>,
+): Promise<void> {
   let entries: import('node:fs').Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
