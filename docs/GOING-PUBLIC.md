@@ -24,6 +24,14 @@ These change how merges behave, and the release automation depends on them.
 - [ ] **Settings → General → Pull Requests** → enable **Automatically delete head
       branches**
 
+- [ ] **Settings → Actions → General → Workflow permissions** → tick **Allow GitHub
+      Actions to create and approve pull requests**
+
+  > **release-please cannot work without this.** It is off by default. The workflow
+  > otherwise runs, computes the next version, creates its branch, and then fails at the
+  > final step with "GitHub Actions is not permitted to create or approve pull requests".
+  > A stale `release-please--branches--main--...` branch is the symptom.
+
 - [ ] **Settings → Rules → Rulesets** (or Branches → branch protection) for `main`:
   - [ ] Require a pull request before merging
   - [ ] Require status checks to pass, and select:
