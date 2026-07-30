@@ -37,18 +37,32 @@ function validateUrl(url: string): void {
   }
 }
 
+/**
+ * `scriptRoot` names the directory this tool writes into, resolved against the folder
+ * holding the config. It therefore may not be absolute or contain `..` — either would
+ * let a config file place files anywhere on the filesystem.
+ *
+ * The hints matter: the natural reaction to "must be relative" is to try `../my-scripts`,
+ * which then hits the second rule, and neither message says what to do instead. The
+ * answer is always the same — run `init` inside the folder you want the scripts in.
+ */
+const SCRIPT_ROOT_HINT =
+  'scriptRoot is a folder *inside* the project (the directory holding ' +
+  `${CONFIG_FILENAME}), e.g. "scripts". To keep scripts somewhere else, run ` +
+  '`iob-sync init` in that folder instead, or use `iob-sync -C <dir>` to work there.';
+
 function validateScriptRoot(scriptRoot: string): void {
   if (path.isAbsolute(scriptRoot) || /^[a-zA-Z]:[\\/]/.test(scriptRoot)) {
     throw new UserError(
-      `Config "scriptRoot" must be relative to the project root, got "${scriptRoot}".`,
-      'Use a relative path such as "scripts".',
+      `Config "scriptRoot" must be relative, got the absolute path "${scriptRoot}".`,
+      SCRIPT_ROOT_HINT,
     );
   }
   const segments = scriptRoot.split(/[\\/]+/).filter((s) => s.length > 0);
   if (segments.some((s) => s === '..')) {
     throw new UserError(
       `Config "scriptRoot" must not escape the project root: "${scriptRoot}".`,
-      'Remove ".." segments from scriptRoot.',
+      SCRIPT_ROOT_HINT,
     );
   }
 }

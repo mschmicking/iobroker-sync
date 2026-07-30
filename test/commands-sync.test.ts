@@ -365,3 +365,92 @@ describe('sync commands', () => {
     assert.match(t.captured.all.join('\n'), /REMOTE-MISSING/i);
   });
 });
+
+describe('pull vs files the user already had', () => {
+  let server: FakeAdminServer;
+  let port: number;
+  let project: TempProject;
+
+  before(async () => {
+    server = new FakeAdminServer();
+    port = await server.start();
+  });
+
+  after(async () => {
+    await server.stop();
+  });
+
+  beforeEach(async () => {
+    server.reset();
+    if (project) await project.cleanup();
+    project = await makeTempProject();
+  });
+
+  /** A never-synced script whose derived path collides with an existing local file. */
+  function collidingScript(source: string): ScriptObject {
+    return {
+      _id: 'script.js.notes',
+      type: 'script',
+      common: {
+        name: 'notes',
+        source,
+        engineType: 'TypeScript/ts',
+        engine: 'system.adapter.javascript.0',
+        enabled: true,
+        expert: true,
+      },
+      native: {},
+    };
+  }
+
+  it('refuses to clobber an untracked local file a script would land on', async () => {
+    // The scenario: someone points scriptRoot at a folder that already has files.
+    // "pull never deletes local files" was true and beside the point — overwriting
+    // loses the work just the same.
+    server.seed([collidingScript('REMOTE CONTENT\n')]);
+    await writeLocal(project, 'notes.ts', 'MY OWN FILE\n');
+
+    const t = await makeContext(port, project);
+    try {
+      await pull(t.ctx, {});
+
+      assert.equal(await readLocal(project, 'notes.ts'), 'MY OWN FILE\n');
+      assert.ok(
+        t.captured.all.some((l) => /conflict/i.test(l)),
+        `expected a conflict report, got ${JSON.stringify(t.captured.all)}`,
+      );
+    } finally {
+      await t.close();
+    }
+  });
+
+  it('--force still takes the remote copy', async () => {
+    server.seed([collidingScript('REMOTE CONTENT\n')]);
+    await writeLocal(project, 'notes.ts', 'MY OWN FILE\n');
+
+    const t = await makeContext(port, project);
+    try {
+      await pull(t.ctx, { force: true });
+
+      assert.equal(await readLocal(project, 'notes.ts'), 'REMOTE CONTENT\n');
+    } finally {
+      await t.close();
+    }
+  });
+
+  it('adopts an identical local file without complaining', async () => {
+    // Same bytes on both sides is not a conflict — it is already what pull wants.
+    server.seed([collidingScript('SAME\n')]);
+    await writeLocal(project, 'notes.ts', 'SAME\n');
+
+    const t = await makeContext(port, project);
+    try {
+      await pull(t.ctx, {});
+
+      assert.equal(await readLocal(project, 'notes.ts'), 'SAME\n');
+      assert.ok(!t.captured.all.some((l) => /conflict/i.test(l)));
+    } finally {
+      await t.close();
+    }
+  });
+});

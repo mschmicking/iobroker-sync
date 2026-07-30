@@ -54,6 +54,7 @@ The five commands worth knowing on day one:
 
 - [Why this exists](#why-this-exists)
 - [iobroker-sync or the VS Code extension?](#iobroker-sync-or-the-vs-code-extension)
+- [Where things live](#where-things-live)
 - [How scripts map to files](#how-scripts-map-to-files)
 - [The edit loop](#the-edit-loop)
 - [Commands](#commands)
@@ -97,6 +98,50 @@ is genuinely good and does things a CLI cannot — go use it.
 Rough rule: **if you live in VS Code, use the extension.** If you want your own editor, a
 git-first workflow, or anything automated, use this. They are not exclusive — both talk
 to the same Admin API, and this tool never writes fields it does not own.
+
+## Where things live
+
+`iob-sync` is a global command that works on a **project folder** — the folder holding
+`.iobroker-sync.json`. Where the tool itself is installed is irrelevant; nothing is ever
+read from or written to `node_modules`.
+
+```
+~/iobroker-scripts/            <- project root: run iob-sync anywhere inside it
+├── .iobroker-sync.json        <- config. Commit it; it holds no password.
+├── .iobroker-sync/            <- state, backups, trash. Gitignored; may contain secrets.
+└── scripts/                   <- scriptRoot: your scripts land here
+    ├── common/garage.ts
+    └── Switch-Musiccast.js
+```
+
+Commands search upward from the current directory for `.iobroker-sync.json`, the way
+`git` finds `.git` — so you can run them from any subfolder. `-C <dir>` runs as if
+started somewhere else.
+
+**`scriptRoot` is relative to the project root and cannot escape it.** Absolute paths and
+`../` are rejected: it is the directory the tool writes into, so a config that pointed
+outside could drop files anywhere on your disk.
+
+That means you do not point an existing project at a scripts folder elsewhere — you run
+`init` **in** the folder you want to keep scripts in:
+
+```bash
+cd ~/iobroker-scripts     # your git repo
+iob-sync init             # config lands here, scriptRoot defaults to "scripts"
+```
+
+Your password is **not** stored here. It lives in
+`~/.config/iobroker-sync/credentials.json` — see [Authentication](#authentication).
+
+### Pointing scriptRoot at a folder that already has files
+
+Safe, but worth knowing: if a script would land on top of a file you already have, and
+the two differ, `pull` reports a **conflict** and leaves your file alone. Use `--force`
+to take the server's copy. Identical files are adopted silently.
+
+Setting `scriptRoot` to `.` (the project root itself) works, but then scripts land beside
+your `README.md` and `package.json`. A subfolder is tidier and keeps `status` output
+meaningful.
 
 ## How scripts map to files
 
@@ -170,8 +215,10 @@ containing `*` is an anchored glob (`iob-sync status 'common/*.ts'`).
 This tool talks to a live home-automation system, and is deliberately conservative about
 destroying work:
 
-- **`pull` never deletes local files.** A script removed on the server shows up in `status`
-  as `remote-missing`; what to do about it is your call.
+- **`pull` never deletes local files, and never silently overwrites one.** A script
+  removed on the server shows up in `status` as `remote-missing`; what to do is your
+  call. A script that would land on top of an existing untracked file is reported as a
+  conflict rather than written over it.
 - **`push` never deletes remote objects**, and writes only `common.source` and
   `common.engineType`. It _cannot_ disable a running script or move it to a different
   javascript instance, because it never sends those fields — a sync bug structurally

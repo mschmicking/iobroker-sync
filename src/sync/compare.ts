@@ -126,9 +126,32 @@ export function computeStatus(input: ComputeStatusInput): SyncStatus[] {
     if (!entry && remoteInfo) {
       // Never synced, exists on the server only. There's no manifest path to trust
       // yet, so derive the path the same way `pull` would place it.
+      const derivedPath = idToRelPath(id, remoteInfo.engineType);
+      const collidingLocal = local.get(derivedPath);
+
+      if (collidingLocal) {
+        // A file the user already had is sitting exactly where this script would
+        // land, and nothing records that the two are related. Reporting `remote-only`
+        // here made `pull` overwrite it without a word — "pull never deletes local
+        // files" was true and beside the point, because clobbering loses the work
+        // just the same. Treat it as a conflict so it needs --force.
+        consumedLocalPaths.add(derivedPath);
+        results.push({
+          id,
+          path: derivedPath,
+          state: collidingLocal.hash === remoteInfo.sourceHash ? 'in-sync' : 'conflict',
+          engineType: remoteInfo.engineType,
+          engine: remoteInfo.engine,
+          enabled: remoteInfo.enabled,
+          remoteHash: remoteInfo.sourceHash,
+          localHash: collidingLocal.hash,
+        });
+        continue;
+      }
+
       results.push({
         id,
-        path: idToRelPath(id, remoteInfo.engineType),
+        path: derivedPath,
         state: 'remote-only',
         engineType: remoteInfo.engineType,
         engine: remoteInfo.engine,
