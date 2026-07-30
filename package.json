@@ -41,7 +41,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/diff": "^5.2.1",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "@types/ws": "^8.5.13",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^9.1.2",
