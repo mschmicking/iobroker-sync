@@ -53,6 +53,27 @@ These change how merges behave, and the release automation depends on them.
 - [ ] Decide the version. `package.json` still says `0.1.0`; releasing as `1.0.0` is a
       commitment to the current CLI surface under semver.
 
+## 3b. Cut the release
+
+release-please only bumps on `feat` and `fix` commits. Everything merged so far is
+`ci`/`chore`/`docs`/`test`, so **no release PR will appear on its own**, and the first
+release has to be asked for explicitly.
+
+To go straight to 1.0.0, land an empty commit naming the version:
+
+```bash
+git commit --allow-empty -m "chore: release 1.0.0" -m "Release-As: 1.0.0"
+git push
+```
+
+release-please then opens a "chore(main): release 1.0.0" PR that bumps
+`package.json`, rewrites `CHANGELOG.md` and updates
+`.release-please-manifest.json`. Merging that PR creates the `v1.0.0` tag.
+
+- [ ] Land the `Release-As` commit
+- [ ] Review and merge the release PR it opens
+- [ ] Confirm the `v1.0.0` tag exists
+
 ## 4. Publish and flip — in this order
 
 `npm publish --provenance` attaches a signed attestation that the tarball was built from
@@ -60,9 +81,11 @@ a specific commit in this repository. **It only works on a public repository**, 
 release workflow fails while private. That forces this sequence:
 
 1. [ ] **Make the repository public** (Settings → General → Danger Zone)
-2. [ ] Remove the `> **Not released yet.**` blockquote from the README quick start, and
+2. [ ] **Wait for CodeQL to finish its first run**, and read the findings. It has been
+       skipping itself this whole time, so its output is genuinely unknown. Going public
+       is reversible; `npm publish` is not — so look before you publish.
+3. [ ] Remove the `> **Not released yet.**` blockquote from the README quick start, and
        the `RELEASE CHECKLIST` HTML comment beside it
-3. [ ] Bump the version and merge the release-please PR (or bump manually and tag)
 4. [ ] Run **Actions → Release to npm** with `dry_run: true` and read the file list
 5. [ ] Run it again with `dry_run: false`
 6. [ ] Verify: `npm view iobroker-sync`, then in a clean directory

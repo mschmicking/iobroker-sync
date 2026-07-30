@@ -21,7 +21,9 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v5
         with:
-          release-type: node
-          # Keeps the existing hand-written CHANGELOG entries intact by appending
-          # below the header rather than replacing the file.
-          changelog-notes-type: default
+          # Configuration lives in release-please-config.json and the current version
+          # in .release-please-manifest.json. Without the manifest the action logs
+          # 'No version for path .' and never opens a release PR — it cannot know
+          # what the previous version was, since no release has ever been tagged.
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
