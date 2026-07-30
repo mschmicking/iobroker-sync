@@ -264,3 +264,19 @@ returns `T`, but that type is a _claim_ about what the server should send, not a
 guarantee — so guards like `result?.rows ?? []` look redundant to the rule and are
 essential at runtime. Following it would trade a handled edge case for a crash against
 someone's house.
+
+### Known flakiness in the watch tests
+
+`test/commands-watch.test.ts` has failed roughly once in ten or twenty **full-suite**
+runs, and not at all when that file runs alone. `node --test` executes files
+concurrently, so a dozen fake servers, chokidar watchers and debounce timers compete
+for the same machine — under that load a timer can slip past its window.
+
+Two mitigations are already in place: the shared debounce is 150 ms rather than 20 ms
+(chokidar can emit `add` and `change` for a single write, and at 20 ms that pair can
+straddle the window), and the coalescing test uses synchronous writes with a 1000 ms
+window so it measures the debounce rather than the disk.
+
+If it recurs, that file is the suspect and the fix is more timing margin — **not**
+loosening an assertion. The thing being tested is the guard against an infinite push
+loop against someone's house.
