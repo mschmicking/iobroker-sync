@@ -223,13 +223,15 @@ used to do, and in a repo that already has a build config it injects `scripts/**
 a config owning `rootDir`/`outDir` and breaks the build with TS6059. The scripts config
 sets `noEmit`, which keeps `rootDir` out of the picture entirely.
 
-Pulled scripts **cannot be typechecked as a single program**. Each ioBroker script runs
+Pulled scripts could not originally be typechecked as a single program. Each ioBroker script runs
 in its own sandbox scope, so top-level names are private to it — but one `tsc` program
 puts them all in one global scope, where they collide (`TS2451` on a shared `axios`,
 `TS2393` on a shared `sendMessage`). These are artifacts of joint checking, not runtime
-bugs; scripts must be checked one program per file. The generated
-`scripts/tsconfig.json` is for editor intellisense and **will** show those false
-collisions.
+bugs. The generated `scripts/tsconfig.json` therefore sets `moduleDetection: force`, which
+gives every file its own scope and makes the whole folder checkable in one pass —
+verified against duplicate top-level names, top-level await, `require()` and .js scripts.
+`module`/`target` are es2022 rather than commonjs because the adapter permits top-level
+await, which commonjs rejects with TS1378.
 
 ### This repo holds no scripts
 

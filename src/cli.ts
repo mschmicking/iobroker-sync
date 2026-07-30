@@ -31,6 +31,7 @@ import { rename } from './commands/rename';
 import { move } from './commands/move';
 import { remove } from './commands/remove';
 import { login, logout } from './commands/login';
+import { setupTypes } from './commands/types';
 
 const program = new Command();
 
@@ -233,6 +234,24 @@ program
       const startDir = resolveCwd();
       const { config } = await loadConfig(startDir);
       await login(config, { passwordStdin: globals().passwordStdin }, logger);
+    })();
+  });
+
+program
+  .command('types')
+  .description('set up editor intellisense for the pulled scripts (log, schedule, on, ...)')
+  .option('-f, --force', 'replace an existing tsconfig.json in the script root')
+  .option('--offline', 'skip downloading javascript.d.ts')
+  .action(function (this: Command) {
+    const opts = this.opts();
+    return action(async () => {
+      const { root, config } = await loadConfig(resolveCwd());
+      await setupTypes(
+        root,
+        config.scriptRoot,
+        { force: opts.force, offline: opts.offline },
+        logger,
+      );
     })();
   });
 

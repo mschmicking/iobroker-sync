@@ -154,9 +154,36 @@ Script folders are ioBroker `channel` objects; nested folders map to nested dire
 `Blockly` and `Rules` scripts are pulled as `.block` / `.rules` for completeness, but their
 sources are generated XML/JSON and are not meant to be hand-edited.
 
-`iob-sync init --types` additionally downloads the ioBroker type definitions and writes a
-`tsconfig.json` into the script folder, so your editor knows what `on()`, `getState()` and
-friends are.
+### Editor support
+
+Straight after a `pull`, an editor will not know what `log`, `schedule`, `on` or
+`getState` are — they exist only inside the javascript adapter's sandbox, so every script
+shows "Cannot find name 'log'". Fix it once:
+
+```bash
+iob-sync types
+```
+
+That downloads the adapter's own typings to `.iobroker/types/` and writes
+`<scriptRoot>/tsconfig.json` so any LSP client — neovim, VS Code, Helix, Zed — picks them
+up. **Restart your language server afterwards.** `init --types` does the same thing during
+setup; `iob-sync types` exists so you can add or refresh them later without touching a
+working config.
+
+Re-run it whenever the adapter gains functions you want typed. `--force` replaces an
+existing `tsconfig.json`, `--offline` skips the download.
+
+If you see `Cannot find namespace 'NodeJS'`, the typings reference Node's own types:
+
+```bash
+npm install --save-dev @types/node
+```
+
+The generated config sets `moduleDetection: force` deliberately. Each ioBroker script
+runs in its own sandbox scope, but to TypeScript a folder of plain scripts shares one
+global scope — so two scripts each declaring `const helper` would collide with TS2451,
+an error about code that is perfectly fine at runtime. Module semantics give every file
+its own scope, matching how the adapter actually runs them.
 
 ## The edit loop
 
@@ -183,6 +210,7 @@ iob-sync logs --level error    # only failures
 | Command            | Description                                                                                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init`             | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions. |
+| `types`            | Set up editor intellisense (`log`, `schedule`, ...). `--force`, `--offline`.                                                                                            |
 | `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                             |
 | `pull [pattern]`   | Download scripts to disk. Never deletes local files.                                                                                                                    |
 | `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                          |

@@ -106,8 +106,8 @@ describe('init --types', () => {
 
       assert.equal(await fs.readFile(scriptsTsconfig, 'utf8'), mine);
       assert.ok(
-        captured.warn.some((m) => m.includes('already exists')),
-        'expected a warning that the existing config was kept',
+        captured.all.some((m) => m.includes('already exists')),
+        'the user should be told the existing config was kept',
       );
     } finally {
       await project.cleanup();

@@ -15,15 +15,7 @@ import { AdminSocketClient } from '../client/socket';
 import { defaultConfig, writeConfig } from '../config';
 import { CONFIG_FILENAME, Logger, STATE_DIR, UserError } from '../types';
 import { isInteractive, promptText, promptYesNo } from '../prompt';
-
-const JAVASCRIPT_DTS_URL =
-  'https://raw.githubusercontent.com/ioBroker/ioBroker.javascript/refs/heads/master/src/lib/javascript.d.ts';
-
-const GLOBAL_DTS_CONTENT = `export {};
-declare global {
-  function require(library: string): any;
-}
-`;
+import { setupTypes } from './types';
 
 export interface InitOptions {
   /** Optional: when absent and a TTY is attached, the user is asked for it. */
@@ -43,92 +35,6 @@ async function pathExists(p: string): Promise<boolean> {
     return true;
   } catch {
     return false;
-  }
-}
-
-/**
- * Builds the tsconfig that gives the *scripts* intellisense.
- *
- * This deliberately lives inside the script root rather than merging into a
- * `tsconfig.json` at the project root: the project root may already hold a build
- * config that owns `rootDir`/`outDir`, and injecting `scripts/**` into it produces
- * TS6059 ("not under rootDir") and breaks that build. Scripts are only ever
- * type-*checked*, never emitted, hence `noEmit`.
- *
- * `typesPrefix` is the relative hop from the script root back to the project root,
- * so the downloaded `.iobroker/types` are picked up from wherever the scripts live.
- *
- * `types` is intentionally left unset: naming `["node"]` hard-fails when `@types/node`
- * is absent, whereas the default (auto-include every visible `@types`) degrades to
- * merely missing the `NodeJS.*` names that `javascript.d.ts` refers to.
- */
-function scriptsTsconfig(typesPrefix: string): Record<string, unknown> {
-  return {
-    compilerOptions: {
-      allowJs: true,
-      checkJs: true,
-      target: 'es2018',
-      lib: ['ES2022'],
-      module: 'commonjs',
-      moduleResolution: 'node',
-      noEmit: true,
-      skipLibCheck: true,
-    },
-    include: ['**/*.ts', '**/*.js', `${typesPrefix}.iobroker/types/**/*.d.ts`],
-  };
-}
-
-async function writeTypesScaffolding(
-  root: string,
-  scriptRoot: string,
-  force: boolean,
-  log: Logger,
-): Promise<void> {
-  const scriptRootDir = path.join(root, scriptRoot);
-  const tsconfigPath = path.join(scriptRootDir, 'tsconfig.json');
-
-  // path.relative gives '..' / '../..'; normalise to a POSIX prefix for tsconfig globs.
-  const rel = path.relative(scriptRootDir, root).split(path.sep).join('/');
-  const typesPrefix = rel === '' ? '' : `${rel}/`;
-
-  if ((await pathExists(tsconfigPath)) && !force) {
-    log.warn(
-      `${tsconfigPath} already exists; leaving it alone. Re-run with --force to replace it.`,
-    );
-  } else {
-    await fs.mkdir(scriptRootDir, { recursive: true });
-    await fs.writeFile(
-      tsconfigPath,
-      JSON.stringify(scriptsTsconfig(typesPrefix), null, 2) + '\n',
-      'utf8',
-    );
-    log.info(`Wrote ${tsconfigPath}`);
-  }
-
-  const typesDir = path.join(root, '.iobroker', 'types');
-  await fs.mkdir(typesDir, { recursive: true });
-
-  try {
-    const res = await fetch(JAVASCRIPT_DTS_URL);
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const text = await res.text();
-    await fs.writeFile(path.join(typesDir, 'javascript.d.ts'), text, 'utf8');
-    log.info('Downloaded javascript.d.ts');
-  } catch (err) {
-    log.warn(`Could not download javascript.d.ts (${(err as Error).message}); skipping.`);
-  }
-
-  await fs.writeFile(path.join(typesDir, 'global.d.ts'), GLOBAL_DTS_CONTENT, 'utf8');
-  log.info(`Wrote ${path.join(typesDir, 'global.d.ts')}`);
-
-  // javascript.d.ts refers to NodeJS.Timeout, NodeJS.ErrnoException and friends
-  // throughout, so without @types/node the scripts light up with "Cannot find
-  // namespace 'NodeJS'". Nothing here can install it, so say so plainly.
-  if (!(await pathExists(path.join(root, 'node_modules', '@types', 'node')))) {
-    log.warn('@types/node is not installed; javascript.d.ts needs it for NodeJS.* types.');
-    log.warn('Run: npm install --save-dev @types/node');
   }
 }
 
@@ -284,6 +190,6 @@ export async function runInit(cwd: string, rawOpts: InitOptions, log: Logger): P
   await probeConnection(config.url, config.username, config.allowSelfSigned, log, opts.interactive);
 
   if (opts.types) {
-    await writeTypesScaffolding(root, config.scriptRoot, opts.force ?? false, log);
+    await setupTypes(root, config.scriptRoot, { force: opts.force }, log);
   }
 }
