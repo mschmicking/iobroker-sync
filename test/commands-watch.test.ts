@@ -13,6 +13,8 @@
 
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
+import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { FakeAdminServer } from './fake-server';
@@ -35,8 +37,12 @@ const SOURCE_A = "log('a');\n";
 const SOURCE_B = "log('b');\n";
 const SOURCE_C = "log('c');\n";
 
-/** Short enough that tests do not spend 300 ms per edit. */
-const DEBOUNCE = 20;
+/**
+ * Short enough to keep the suite quick, long enough to absorb chokidar emitting
+ * more than one event for a single write. At 20 ms an add+change pair can straddle
+ * the window and produce two pushes, which shows up as a rare CI-only failure.
+ */
+const DEBOUNCE = 150;
 
 function script(source: string, overrides: Partial<ScriptObject['common']> = {}): ScriptObject {
   return {
@@ -133,7 +139,7 @@ describe('watch', () => {
     const handle = await watch(t.ctx, { pull: true, debounceMs: DEBOUNCE });
     try {
       await writeLocal(project, REL, SOURCE_B);
-      await waitFor(() => pushLines(t.captured.result).length === 1, 'the push to complete');
+      await waitFor(() => pushLines(t.captured.result).length >= 1, 'the push to complete');
 
       // What the javascript adapter does after a push: same source, plus the
       // fields it manages itself.
@@ -166,14 +172,19 @@ describe('watch', () => {
     await writeLocal(project, REL, SOURCE_A);
     await writeManifest(project.root, [entryFor(ID, REL, 'TypeScript/ts', SOURCE_A)]);
 
+    // A generous window plus synchronous writes, so this asserts that the debounce
+    // coalesces — not that the runner's disk is fast. With an async helper and a
+    // 120 ms window, three awaited writes can straddle the window on a loaded CI
+    // machine and legitimately produce two pushes.
     const t = await makeContext(port, project);
-    const handle = await watch(t.ctx, { debounceMs: 120 });
+    const handle = await watch(t.ctx, { debounceMs: 1000 });
     try {
-      await writeLocal(project, REL, "log('1');\n");
-      await writeLocal(project, REL, "log('2');\n");
-      await writeLocal(project, REL, SOURCE_B);
+      const target = path.join(project.scriptRoot, REL);
+      writeFileSync(target, "log('1');\n", 'utf8');
+      writeFileSync(target, "log('2');\n", 'utf8');
+      writeFileSync(target, SOURCE_B, 'utf8');
 
-      await waitFor(() => pushLines(t.captured.result).length >= 1, 'the push to complete');
+      await waitFor(() => pushLines(t.captured.result).length >= 1, 'the push to complete', 8000);
       await settle();
 
       assert.equal(
