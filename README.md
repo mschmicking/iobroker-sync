@@ -14,7 +14,7 @@ or a CI job. `iobroker-sync` maps them to a local folder and keeps the two in st
 ## Quick start
 
 > **Not released yet.** `iobroker-sync` is not on npm until v1.0, so the command below
-> does not work today — see [Development](#development) to run it from a clone.
+> does not work today — see [Running it from a clone](#running-it-from-a-clone).
 
 <!-- RELEASE CHECKLIST — do these together, in this order:
      1. npm publish  (the GitHub URL is the npm homepage, so the package must exist first)
@@ -326,15 +326,46 @@ because `logs` and `watch` never end; use `jq -s .` if you want a single documen
 
 ## Development
 
+### Running it from a clone
+
+Until the package is on npm, this is how to try it:
+
 ```bash
 git clone https://github.com/mschmicking/iobroker-sync
 cd iobroker-sync
 npm install
 npm run build
 npm link            # puts `iob-sync` on your PATH from your working copy
+```
 
+**Then leave this directory.** `iob-sync` operates on whatever folder you run it in, so
+`init` belongs in your _scripts_ folder, not in the clone:
+
+```bash
+cd ~/iobroker-scripts     # your own folder — create it if it does not exist
+iob-sync init
+iob-sync pull
+```
+
+Running `init` inside the clone makes the tool's own repository the project root, and
+`scriptRoot` cannot point outside it — so there is no way to reach scripts kept
+elsewhere. If you have already done that, delete the stray `.iobroker-sync.json`,
+`.iobroker-sync/` and `scripts/` from the clone and start again in the right folder.
+
+If you prefer not to `npm link`, call the built entry point directly and let `-C` choose
+the project:
+
+```bash
+node /path/to/iobroker-sync/dist/cli.js -C ~/iobroker-scripts list
+```
+
+### Working on the tool
+
+```bash
 npm test            # full suite
 npm run test:unit   # pure-logic tests only
+npm run lint
+npm run verify      # lint + format check + typecheck + tests
 ```
 
 Every test runs against an in-process fake Admin server (`test/fake-server.ts`); none
