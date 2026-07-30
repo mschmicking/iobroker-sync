@@ -74,10 +74,23 @@ export async function logs(ctx: CommandContext, opts: LogsOptions = {}): Promise
 
   // Announced before subscribing, not after: the server logs our own connection, so
   // a line can arrive while `subscribe` is still in flight and print above the banner.
+  const level = parseLevel(opts.level);
   ctx.log.info(
     `Streaming logs from ${ctx.config.url}${opts.pattern ? ` matching "${opts.pattern}"` : ''} ` +
-      `at level ${parseLevel(opts.level)} and above.`,
+      `at level ${level} and above.`,
   );
+
+  // This filter only narrows what the server already sends. An adapter emits nothing
+  // below its own configured log level, so asking for debug here while javascript.2
+  // runs at info yields silence — and the flag makes it look like the tool is broken
+  // rather than that the messages were never sent.
+  if (level === 'debug' || level === 'silly') {
+    ctx.log.info(
+      `Note: ${level} lines only appear if the adapter itself is set to ${level} ` +
+        '(ioBroker Admin → Instances → the javascript instance → log level). ' +
+        'Script recompile/start/stop messages are debug-level.',
+    );
+  }
 
   await ctx.socket.subscribeLog((entry) => {
     if (severityRank(entry.severity) < minRank) return;

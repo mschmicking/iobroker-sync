@@ -62,6 +62,7 @@ The five commands worth knowing on day one:
 - [Safety model](#safety-model)
 - [Authentication](#authentication)
 - [Scripting and automation](#scripting-and-automation)
+- [Docs](#docs)
 - [Known limitations](#known-limitations)
 - [Development](#development)
 
@@ -203,6 +204,21 @@ iob-sync logs garage           # only lines mentioning "garage"
 iob-sync logs --level error    # only failures
 ```
 
+#### If `logs` shows nothing
+
+It is streaming; there is simply nothing to show. Two things surprise people:
+
+- **`--level` only narrows what the server already sends.** An ioBroker adapter emits
+  nothing below _its own_ configured log level, so asking for `--level debug` while
+  `javascript.0` runs at `info` produces silence. Raise it in **Admin → Instances →
+  your javascript instance → log level**.
+- **"script recompiled / started / stopped" messages are debug-level**, so at the default
+  `info` they are never emitted at all — a `push` looks silent even though it worked.
+  Your own `log()` calls are info and do appear.
+
+To prove the stream is alive, run `iob-sync logs` and open a second terminal running any
+`iob-sync` command: Admin logs every connection at info, so a line appears immediately.
+
 ## Commands
 
 **Sync**
@@ -306,35 +322,16 @@ Connect to the **admin adapter** port (usually 8081), not the socket.io adapter 
 
 ## Scripting and automation
 
-Human output is for reading; `--json` is for everything else. It emits
-[NDJSON](https://ndjson.org) on stdout — one JSON object per line, each tagged with a
-`type`. Human text is suppressed and warnings/errors stay on stderr, so **stdout stays
-parseable even when a command fails**.
-
-What that is actually for:
+`--json` puts [NDJSON](https://ndjson.org) on stdout — one JSON object per line, each
+tagged with a `type`. Human text is suppressed and warnings/errors stay on stderr, so
+**stdout stays parseable even when a command fails**.
 
 ```bash
 # Fail a CI job if anything drifted from git
 test -z "$(iob-sync --json status | jq -rc 'select(.state != "in-sync")')"
-
-# Alert if a script got disabled behind your back
-iob-sync --json list | jq -r 'select(.enabled | not) | .id'
-
-# Nightly backup, reporting where the snapshot went
-iob-sync --json backup | jq -r .snapshot
-
-# Follow only errors, as structured events
-iob-sync --json logs --level error
 ```
 
-It is also what makes the tool usable by a coding agent: an agent editing your scripts
-can read `status`, push, and then watch `logs` for a compile failure, without
-screen-scraping a table meant for a terminal.
-
-Records carry underlying values rather than display strings — `enabled` is a boolean, not
-`"✓"`; `engine` is the full instance id, not `js.2`; and `--json status` includes the
-in-sync scripts the human view collapses into a count. NDJSON rather than one array
-because `logs` and `watch` never end; use `jq -s .` if you want a single document.
+See **[docs/AUTOMATION.md](docs/AUTOMATION.md)** for the record shapes and more examples.
 
 ## Known limitations
 
@@ -399,6 +396,13 @@ npm run verify      # lint + format check + typecheck + tests
 Every test runs against an in-process fake Admin server (`test/fake-server.ts`); none
 touches a real instance. `AGENTS.md` documents the architecture, the wire protocol, and
 the safety invariants any change has to preserve — read it before changing sync logic.
+
+## Docs
+
+- **[docs/AUTOMATION.md](docs/AUTOMATION.md)** — `--json` record shapes, CI and agent usage
+- **[docs/GOING-PUBLIC.md](docs/GOING-PUBLIC.md)** — release checklist (maintainers)
+- **[AGENTS.md](AGENTS.md)** — architecture, wire protocol, safety invariants
+- **[CHANGELOG.md](CHANGELOG.md)**
 
 ## License
 
