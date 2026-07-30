@@ -16,6 +16,10 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    # Skip rather than fail while the repository is private: code scanning needs
+    # GitHub Advanced Security there, and a permanently red workflow trains people
+    # to ignore red workflows.
+    if: ${{ !github.event.repository.private }}
     permissions:
       security-events: write
       contents: read

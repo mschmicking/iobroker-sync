@@ -12,9 +12,10 @@
  * network call.
  */
 
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
@@ -53,6 +54,16 @@ async function runCli(
 }
 
 describe('cli argv handling', () => {
+  before(() => {
+    // Without this, a missing dist/ produces a handful of unrelated-looking
+    // failures instead of one sentence naming the cause. `npm test` builds dist
+    // for exactly this reason.
+    assert.ok(
+      existsSync(CLI),
+      `${CLI} does not exist — run \`npm run build\` first (npm test does this for you).`,
+    );
+  });
+
   it('lists every command in --help', async () => {
     const { stdout, code } = await runCli(['--help']);
 

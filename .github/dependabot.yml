@@ -1,0 +1,39 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # PR titles feed release-please, so they must parse as conventional commits.
+    commit-message:
+      prefix: 'fix(deps)'
+      prefix-development: 'chore(deps)'
+    groups:
+      # One PR for the lint/format toolchain instead of five: these move together
+      # and a bump is never interesting on its own.
+      dev-tooling:
+        dependency-type: development
+        patterns:
+          - '@typescript-eslint/*'
+          - 'typescript-eslint'
+          - 'eslint*'
+          - 'prettier*'
+          - 'typescript'
+          - '@types/*'
+    ignore:
+      # Majors reach a user's machine and can change runtime behaviour against a
+      # live instance; review those deliberately rather than as a routine PR.
+      - dependency-name: 'ws'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'chokidar'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci(deps)'

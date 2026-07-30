@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 20 is the floor declared in package.json engines; 22 is current LTS.
-        node: [20, 22]
+        # 22 is the floor in package.json engines (Node 20 is EOL); 24 is current.
+        node: [22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
         run: npm test
 
       - name: Verify the published tarball contains what it should
-        if: matrix.node == 22
+        if: matrix.node == 24
         run: |
           npm pack --dry-run --json > pack.json
           node -e "
