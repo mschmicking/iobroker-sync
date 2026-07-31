@@ -12,14 +12,29 @@ Work top to bottom. The ordering in step 4 matters.
 
 These change how merges behave, and the release automation depends on them.
 
+> **Branch protection is not in this section on purpose.** On the free plan it is
+> unavailable for private repositories — the API answers "Upgrade to GitHub Pro or make
+> this repository public to enable this feature". It has to wait until step 5.
+
 - [ ] **Settings → General → Pull Requests**
   - [ ] Enable **Allow squash merging**
-  - [ ] Disable **Allow merge commits** and **Allow rebase merging**
+  - [ ] Disable **Allow merge commits**
+  - [ ] Disable **Allow rebase merging**
   - [ ] Set **Default commit message** for squash merges to **Pull request title**
 
-  > **Why this is not optional:** the squashed commit message is what release-please
-  > parses to decide the next version. A default GitHub merge message does not parse as a
-  > conventional commit, so releases silently never happen.
+  > **Why squash only:** the commit that lands on `main` is what release-please reads to
+  > decide the next version, and the `conventional-commit` check validates the **PR
+  > title** — nothing validates the individual commits inside a branch.
+  >
+  > - _Squash_ → the validated PR title becomes the commit. Always parses. One PR, one
+  >   changelog entry.
+  > - _Rebase_ → replays every commit from the branch onto `main` with its own message.
+  >   "wip", "fix typo" and "oops" land unvalidated, and each is a candidate changelog
+  >   entry. Nothing checks them.
+  > - _Merge_ → adds "Merge pull request #N from …", which does not parse at all.
+  >
+  > So **yes, turn rebase merging off** unless you are willing to hand-write conventional
+  > commits for every intermediate commit in every branch.
 
 - [ ] **Settings → General → Pull Requests** → enable **Automatically delete head
       branches**
@@ -31,17 +46,6 @@ These change how merges behave, and the release automation depends on them.
   > otherwise runs, computes the next version, creates its branch, and then fails at the
   > final step with "GitHub Actions is not permitted to create or approve pull requests".
   > A stale `release-please--branches--main--...` branch is the symptom.
-
-- [ ] **Settings → Rules → Rulesets** (or Branches → branch protection) for `main`:
-  - [ ] Require a pull request before merging
-  - [ ] Require status checks to pass, and select:
-        `test (22)`, `test (24)`, `audit`, `conventional-commit`, `gitleaks`
-  - [ ] Require branches to be up to date before merging
-  - [ ] Block force pushes
-
-  > Without this, CI still reports failures but nothing stops a merge. Note that
-  > selecting a check only works after it has run at least once, so push a throwaway PR
-  > first if the names do not appear.
 
 ## 2. Secrets and tokens
 
@@ -116,6 +120,31 @@ Things that only start working once the repository is public:
 - [ ] Run whatever external analysis you planned (SonarQube Cloud). Worth pointing it at
       `src/sync/safe-path.ts` (server-controlled ids become file paths) and
       `src/credentials.ts` specifically.
+- [ ] **Branch protection** — now available, since the repository is public.
+      **Settings → Rules → Rulesets → New branch ruleset**:
+
+  - Name: `main` (the name is only a label; it appears in the "blocked by" message when
+    a push is rejected, so something plain is better than something clever)
+  - Enforcement status: **Active**
+  - Target branches: **Include default branch**
+  - Rules:
+    - [ ] Require a pull request before merging (approvals: 0 is fine for a solo project —
+          it still forces the PR flow so the checks run)
+    - [ ] Require status checks to pass → add `test (22)`, `test (24)`, `audit`,
+          `conventional-commit`, `gitleaks`
+    - [ ] Require branches to be up to date before merging
+    - [ ] Block force pushes
+
+  > A status check can only be selected after it has run at least once, so open a
+  > throwaway PR first if the names do not appear in the picker.
+  >
+  > Leave **Restrict deletions** on and **Require signed commits** off unless you already
+  > sign commits — turning it on retroactively blocks your own merges.
+  >
+  > Note release-please pushes its release branch directly. If you enable "Require a pull
+  > request" with bypass disabled, add the GitHub Actions app to the bypass list, or the
+  > release PR cannot be created.
+
 - [ ] Add repository topics: `iobroker`, `cli`, `home-automation`, `typescript`
 - [ ] Set the repository description and homepage
 
