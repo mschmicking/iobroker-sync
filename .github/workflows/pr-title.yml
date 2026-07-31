@@ -31,16 +31,24 @@ jobs:
             ci
             chore
             revert
-          # Optional, but keep the vocabulary small so it stays meaningful.
+          # Optional, but keep the vocabulary small so it stays meaningful. A scope is
+          # not required, but any scope used must appear here.
+          #
+          # 'main' is not a component — it is the branch name release-please puts in its
+          # own PR title ("chore(main): release 1.0.0"). Without it that title fails this
+          # check, and once the check is required by the branch ruleset the release PR
+          # becomes unmergeable.
           scopes: |
             sync
             auth
             watch
             logs
             json
+            types
             cli
             deps
             docs
+            main
           requireScope: false
           # Only the trailing full stop is rejected. A lower-case rule was tried and
           # removed: Dependabot capitalises some of its titles ("Bump x from 1 to 2")

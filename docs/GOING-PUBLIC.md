@@ -16,7 +16,7 @@ These change how merges behave, and the release automation depends on them.
 > "Your rulesets won't be enforced on this private repository until you move to a GitHub
 > Team organization account". Reading it back over the API also 403s on the free plan.
 > So configure it whenever you like — it starts working the moment the repo is public.
-> `docs/main-ruleset.json` is a ready-to-import copy.
+> The settings are listed in step 5.
 
 - [ ] **Settings → General → Pull Requests**
   - [ ] Enable **Allow squash merging**
@@ -124,8 +124,6 @@ Things that only start working once the repository is public:
       `src/credentials.ts` specifically.
 - [ ] **Branch protection** — now available, since the repository is public.
       **Settings → Rules → Rulesets → New branch ruleset**:
-
-  Import `docs/main-ruleset.json`, or set it by hand:
 
   - Name: `main` (only a label; it appears in the "blocked by" message on a rejected push)
   - Enforcement status: **Active**
