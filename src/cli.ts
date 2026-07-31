@@ -6,6 +6,7 @@
  * to the requested command, and guarantees the socket is closed afterwards.
  */
 
+import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { Command } from 'commander';
 
@@ -32,6 +33,15 @@ import { move } from './commands/move';
 import { remove } from './commands/remove';
 import { login, logout } from './commands/login';
 import { setupTypes } from './commands/types';
+
+/**
+ * Read at runtime rather than hardcoded. The literal that used to live here said
+ * 0.1.0 while the published package was 1.0.0 — release-please bumps package.json
+ * and had no way to reach a string in the source, so `--version` lied to every
+ * user. dist/cli.js sits one level below package.json in both the repository and
+ * the installed package, so the relative path holds in both.
+ */
+const { version } = createRequire(__filename)('../package.json') as { version: string };
 
 const program = new Command();
 
@@ -171,7 +181,7 @@ function action(fn: () => Promise<void>): () => Promise<void> {
 program
   .name('iob-sync')
   .description('Sync ioBroker scripts with a local folder')
-  .version('0.1.0')
+  .version(version)
   .option('-n, --dry-run', 'show what would happen without changing anything')
   .option('-v, --verbose', 'verbose output')
   .option('-C, --cwd <dir>', 'run as if started in <dir>')
