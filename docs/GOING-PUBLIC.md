@@ -12,9 +12,11 @@ Work top to bottom. The ordering in step 4 matters.
 
 These change how merges behave, and the release automation depends on them.
 
-> **Branch protection is not in this section on purpose.** On the free plan it is
-> unavailable for private repositories — the API answers "Upgrade to GitHub Pro or make
-> this repository public to enable this feature". It has to wait until step 5.
+> **Branch protection can be created now but will not be enforced yet.** GitHub warns
+> "Your rulesets won't be enforced on this private repository until you move to a GitHub
+> Team organization account". Reading it back over the API also 403s on the free plan.
+> So configure it whenever you like — it starts working the moment the repo is public.
+> `docs/main-ruleset.json` is a ready-to-import copy.
 
 - [ ] **Settings → General → Pull Requests**
   - [ ] Enable **Allow squash merging**
@@ -123,17 +125,27 @@ Things that only start working once the repository is public:
 - [ ] **Branch protection** — now available, since the repository is public.
       **Settings → Rules → Rulesets → New branch ruleset**:
 
-  - Name: `main` (the name is only a label; it appears in the "blocked by" message when
-    a push is rejected, so something plain is better than something clever)
+  Import `docs/main-ruleset.json`, or set it by hand:
+
+  - Name: `main` (only a label; it appears in the "blocked by" message on a rejected push)
   - Enforcement status: **Active**
   - Target branches: **Include default branch**
   - Rules:
-    - [ ] Require a pull request before merging (approvals: 0 is fine for a solo project —
-          it still forces the PR flow so the checks run)
-    - [ ] Require status checks to pass → add `test (22)`, `test (24)`, `audit`,
+    - [ ] Require a pull request before merging, **required approvals: 0**
+    - [ ] Allowed merge methods: **squash only**
+    - [ ] Require status checks to pass → `test (22)`, `test (24)`, `audit`,
           `conventional-commit`, `gitleaks`
     - [ ] Require branches to be up to date before merging
-    - [ ] Block force pushes
+    - [ ] Block force pushes, block deletions
+
+  > **Required approvals must be 0 on a solo repository.** GitHub does not let you approve
+  > your own pull request, and a ruleset with an empty bypass list does not exempt
+  > repository admins — so requiring one approval makes `main` permanently unmergeable,
+  > including for Dependabot and the release PR. Zero still forces the PR flow, which is
+  > the part that makes the checks run.
+  >
+  > **Restrict merge methods to squash here too.** The repository setting is a default
+  > that can be changed back; the ruleset is the thing that actually holds.
 
   > A status check can only be selected after it has run at least once, so open a
   > throwaway PR first if the names do not appear in the picker.
