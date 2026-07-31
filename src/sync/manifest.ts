@@ -34,7 +34,7 @@ function isValidManifestShape(value: unknown): value is Manifest {
  * unreadable or malformed.
  *
  * `warn` is threaded in rather than writing to the console directly: only cli.ts
- * owns stdout/stderr (see AGENTS.md), and a warning that bypasses the logger cannot
+ * owns stdout/stderr, and a warning that bypasses the logger cannot
  * be captured by tests or suppressed under --json.
  */
 export async function loadManifest(root: string, warn?: (msg: string) => void): Promise<Manifest> {

@@ -11,7 +11,7 @@
  *                            working file and pushed
  *   objects/<id>.json        the *whole* object, including `common.enabled` and
  *                            `common.engine` — the fields `push` deliberately
- *                            never writes (see AGENTS.md invariant 2), so this is
+ *                            never writes — push is field-scoped on purpose — so this is
  *                            the only record of which instance a script ran on and
  *                            whether it was enabled
  *

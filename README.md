@@ -393,16 +393,28 @@ npm run lint
 npm run verify      # lint + format check + typecheck + tests
 ```
 
-Every test runs against an in-process fake Admin server (`test/fake-server.ts`); none
-touches a real instance. `AGENTS.md` documents the architecture, the wire protocol, and
-the safety invariants any change has to preserve — read it before changing sync logic.
+Every test runs against an in-process fake Admin server (`test/fake-server.ts`); **no test
+may touch a real instance.**
+
+Before changing sync logic, note the invariants the tests exist to protect:
+
+- `pull` never deletes a local file, and never silently overwrites one.
+- `push` sends only `common.source` and `common.engineType` — never `enabled` or
+  `engine`. `ObjectsApi.extendScript` is typed to enforce it, so a sync bug structurally
+  cannot stop a running script or move it between javascript instances.
+- Conflicts refuse and exit non-zero rather than guessing.
+- Only `remove`, `rename` and `move` delete anything; each needs `--yes` and writes the
+  object to `.iobroker-sync/trash/` first.
+- `watch` suppresses the adapter's own `compiled`/`sourceHash` write-back. A regression
+  there means an infinite push loop against a live instance.
+
+Commands never call `console.*` — output goes through `ctx.log`, which is what makes
+`--json` and the tests possible. ESLint enforces this everywhere except `cli.ts`.
 
 ## Docs
 
 - **[docs/AUTOMATION.md](docs/AUTOMATION.md)** — `--json` record shapes, CI and agent usage
-- **[docs/GOING-PUBLIC.md](docs/GOING-PUBLIC.md)** — release checklist (maintainers)
-- **[AGENTS.md](AGENTS.md)** — architecture, wire protocol, safety invariants
-- **[CHANGELOG.md](CHANGELOG.md)**
+- **[CHANGELOG.md](CHANGELOG.md)** — release history
 
 ## License
 

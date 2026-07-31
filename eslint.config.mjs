@@ -105,8 +105,7 @@ export default tseslint.config(
   },
 
   // Commands must route user-facing output through ctx.log, never console.*.
-  // This is an AGENTS.md invariant; encoding it here means it is enforced
-  // rather than remembered.
+  // Encoding the rule here means it is enforced rather than remembered.
   {
     files: ['src/**/*.ts'],
     ignores: ['src/cli.ts'],
