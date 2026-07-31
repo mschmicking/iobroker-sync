@@ -48,6 +48,7 @@ jobs:
             cli
             deps
             docs
+            release
             main
           requireScope: false
           # Only the trailing full stop is rejected. A lower-case rule was tried and
