@@ -1,9 +1,15 @@
 name: Release to npm
 
-# Manual only. There is no push/tag trigger on purpose: publishing is
-# irreversible (npm forbids re-using a version number, and unpublishing is
-# restricted), so it should never happen as a side effect of a commit.
+# Fires when release-please publishes a GitHub Release — that only happens when a
+# release pull request is merged, which is itself a deliberate act with the version
+# and changelog visible for review. So merging the release PR is the single action
+# that ships a version.
+#
+# Still dispatchable by hand, defaulting to a dry run, for re-publishing after a
+# failure or validating the tarball without shipping.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -63,7 +69,7 @@ jobs:
           fi
 
       - name: Pack (dry run)
-        if: inputs.dry_run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: npm publish --dry-run
 
       # No NODE_AUTH_TOKEN. Publishing uses npm trusted publishing (OIDC): npm
@@ -74,13 +80,12 @@ jobs:
       #
       # Provenance is automatic under OIDC for a public package from a public repo,
       # so --provenance is not passed explicitly.
+      # On a release event inputs.dry_run is undefined, so this must not rely on
+      # negating it — an undefined input would otherwise read as "not a dry run"
+      # by luck rather than intent.
       - name: Publish
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'release' || !inputs.dry_run }}
         run: npm publish --access public
 
-      - name: Tag the released commit
-        if: ${{ !inputs.dry_run }}
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+      # No tagging step: release-please already created the tag and the GitHub
+      # Release that triggered this run.
