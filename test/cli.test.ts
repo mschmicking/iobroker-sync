@@ -204,10 +204,17 @@ describe('cli argv handling', () => {
     }
   });
 
-  it('prints the version', async () => {
+  it('prints the version from package.json, not a hardcoded literal', async () => {
+    // It used to be a string in cli.ts. release-please bumps package.json and
+    // cannot reach that string, so the published 1.0.0 reported 0.1.0 to every
+    // user who ran --version.
+    const pkg = JSON.parse(
+      await fs.readFile(path.resolve(process.cwd(), 'package.json'), 'utf8'),
+    ) as { version: string };
+
     const { stdout, code } = await runCli(['--version']);
 
     assert.equal(code, 0);
-    assert.match(stdout, /\d+\.\d+\.\d+/);
+    assert.equal(stdout.trim(), pkg.version);
   });
 });
