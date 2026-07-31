@@ -115,45 +115,45 @@ release-please then opens a "chore(main): release 1.0.0" PR that bumps
 Provenance and OIDC both require a **public** repository, and a trusted publisher can
 only be attached to a package that already exists. That fixes the order:
 
-1. [ ] **Make the repository public** (Settings → General → Danger Zone)
+- [ ] **Make the repository public** (Settings → General → Danger Zone)
 
-2. [ ] **Wait for CodeQL's first run** and read the findings. It has skipped itself the
-       whole time, so its output is genuinely unknown. Going public is reversible;
-       `npm publish` is not.
+- [ ] **Wait for CodeQL's first run** and read the findings. It has skipped itself the
+      whole time, so its output is genuinely unknown. Going public is reversible;
+      `npm publish` is not.
 
-3. [ ] Remove the `> **Not released yet.**` note from the README quick start and the
-       `RELEASE CHECKLIST` comment beside it.
+- [ ] Remove the `> **Not released yet.**` note from the README quick start, and the
+      `RELEASE CHECKLIST` comment beside it.
 
-4. [ ] **Publish once by hand**, from a machine where npm works — no token involved:
+- [ ] **Publish once by hand**, from a machine where npm works. No token is involved:
 
-       npm login          # interactive, honours your 2FA
-               npm publish --access public
+```bash
+npm login          # interactive, honours your 2FA
+npm publish --access public
+```
 
-               This is the only publish that needs a human. It exists purely so the package name
-               is registered and can be configured.
+This is the only publish that needs a human. It exists purely so the package name is
+registered and can then be configured.
 
-5. [ ] **Attach the trusted publisher** at
-       `npmjs.com/package/iobroker-sync/access` → Trusted Publisher → GitHub Actions:
+- [ ] **Attach the trusted publisher** at `npmjs.com/package/iobroker-sync/access` →
+      Trusted Publisher → GitHub Actions. All fields are **case-sensitive and exact**:
 
-       | Field | Value |
-               | --- | --- |
-               | Organization or user | `mschmicking` |
-               | Repository | `iobroker-sync` |
-               | Workflow filename | `release.yml` |
-               | Environment | *(leave empty)* |
-               | Allowed actions | `npm publish` |
+| Field                | Value           |
+| -------------------- | --------------- |
+| Organization or user | `mschmicking`   |
+| Repository           | `iobroker-sync` |
+| Workflow filename    | `release.yml`   |
+| Environment          | _(leave empty)_ |
+| Allowed actions      | `npm publish`   |
 
-               All fields are **case-sensitive and exact**.
+- [ ] From here on releases run themselves: **Actions → Release to npm**, first with
+      `dry_run: true` to read the file list, then `dry_run: false`.
 
-6. [ ] From here on, releases run themselves: **Actions → Release to npm**, first with
-       `dry_run: true` to read the file list, then `dry_run: false`.
+- [ ] Verify: `npm view iobroker-sync`, then in a clean directory
+      `npm i -g iobroker-sync && iob-sync --help`. The npm page should show a
+      **Provenance** badge, generated automatically under OIDC.
 
-7. [ ] Verify: `npm view iobroker-sync`, then in a clean directory
-       `npm i -g iobroker-sync && iob-sync --help`. The npm page should show a
-       **Provenance** badge — it is generated automatically under OIDC.
-
-> The window between step 1 and step 4 is the only time the README promises a package
-> that does not exist. Keep it short.
+> The window between making the repository public and the first publish is the only time
+> the README promises a package that does not exist. Keep it short.
 
 ## 5. After going public
 
