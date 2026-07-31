@@ -4,6 +4,14 @@
   "description": "CLI to sync ioBroker JavaScript/TypeScript scripts with a local folder",
   "license": "MIT",
   "author": "Maurice Schmicking",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mschmicking/iobroker-sync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mschmicking/iobroker-sync/issues"
+  },
+  "homepage": "https://github.com/mschmicking/iobroker-sync#readme",
   "keywords": [
     "iobroker",
     "cli",
