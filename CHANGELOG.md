@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0](https://github.com/mschmicking/iobroker-sync/compare/v0.1.0...v1.0.0) (2026-07-31)
+
+
+### Added
+
+* **types:** add an `iob-sync types` command and fix phantom collisions ([3b9724b](https://github.com/mschmicking/iobroker-sync/commit/3b9724b99a996acb1f2fabaff9823ae48d764869))
+
+
+### Fixed
+
+* **ci:** allow the scope release-please uses in its own PR title ([6fe3742](https://github.com/mschmicking/iobroker-sync/commit/6fe37420e086025baea4cf3ebbd87a6ceea42cdb))
+* **ci:** let the release PR actually run its checks, and fix the tag name ([02e36c7](https://github.com/mschmicking/iobroker-sync/commit/02e36c7316fd4abd7ebb68df75f92924f5ce989e))
+* **ci:** make release-please able to open a release PR ([cab77a4](https://github.com/mschmicking/iobroker-sync/commit/cab77a46594220dafe308cd2f7633c816ffeac8a))
+* **sync:** stop pull silently overwriting files the user already had ([e8ccf4a](https://github.com/mschmicking/iobroker-sync/commit/e8ccf4ac658d0f8d6e245583e292143367cba3b2))
+
+
+### Chores
+
+* release 1.0.0 ([837b553](https://github.com/mschmicking/iobroker-sync/commit/837b553b5fe743479a5a47c35539d238b02f0c02))
+
 ## [Unreleased]
 
 Nothing published to npm yet. The entries below describe the state being prepared

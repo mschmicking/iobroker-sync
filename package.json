@@ -1,6 +1,6 @@
 {
   "name": "iobroker-sync",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "CLI to sync ioBroker JavaScript/TypeScript scripts with a local folder",
   "license": "MIT",
   "author": "Maurice Schmicking",
