@@ -11,15 +11,6 @@ or a CI job. `iobroker-sync` maps them to a local folder and keeps the two in st
 
 ## Quick start
 
-> **Not released yet.** `iobroker-sync` is not on npm until v1.0, so the command below
-> does not work today — see [DEVELOPMENT.md](docs/DEVELOPMENT.md) to run it from a clone.
-
-<!-- RELEASE CHECKLIST — do these together, in this order:
-     1. npm publish  (the GitHub URL is the npm homepage, so the package must exist first)
-     2. delete the "Not released yet" note above
-     3. flip the repository to public
-     Publishing after going public leaves this quick start broken for every visitor. -->
-
 ```bash
 npm install -g iobroker-sync
 ```
