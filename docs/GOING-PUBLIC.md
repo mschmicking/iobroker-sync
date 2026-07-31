@@ -127,23 +127,23 @@ only be attached to a package that already exists. That fixes the order:
 4. [ ] **Publish once by hand**, from a machine where npm works — no token involved:
 
        npm login          # interactive, honours your 2FA
-           npm publish --access public
+               npm publish --access public
 
-           This is the only publish that needs a human. It exists purely so the package name
-           is registered and can be configured.
+               This is the only publish that needs a human. It exists purely so the package name
+               is registered and can be configured.
 
 5. [ ] **Attach the trusted publisher** at
        `npmjs.com/package/iobroker-sync/access` → Trusted Publisher → GitHub Actions:
 
        | Field | Value |
-           | --- | --- |
-           | Organization or user | `mschmicking` |
-           | Repository | `iobroker-sync` |
-           | Workflow filename | `release.yml` |
-           | Environment | *(leave empty)* |
-           | Allowed actions | `npm publish` |
+               | --- | --- |
+               | Organization or user | `mschmicking` |
+               | Repository | `iobroker-sync` |
+               | Workflow filename | `release.yml` |
+               | Environment | *(leave empty)* |
+               | Allowed actions | `npm publish` |
 
-           All fields are **case-sensitive and exact**.
+               All fields are **case-sensitive and exact**.
 
 6. [ ] From here on, releases run themselves: **Actions → Release to npm**, first with
        `dry_run: true` to read the file list, then `dry_run: false`.
