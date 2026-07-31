@@ -21,6 +21,13 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v5
         with:
+          # A PAT, not GITHUB_TOKEN. GitHub refuses to trigger workflows from events
+          # raised with GITHUB_TOKEN, so the release pull request would arrive with
+          # every check stuck in "action_required" and never run — and the branch
+          # ruleset requires those checks, making the PR permanently unmergeable.
+          # Falls back to GITHUB_TOKEN so the workflow still functions without the
+          # secret; the PR just will not get checks.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           # Configuration lives in release-please-config.json and the current version
           # in .release-please-manifest.json. Without the manifest the action logs
           # 'No version for path .' and never opens a release PR — it cannot know

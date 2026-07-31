@@ -56,6 +56,18 @@ These change how merges behave, and the release automation depends on them.
       — a publish token will prompt for 2FA and hang in CI
 - [ ] Add it as **Settings → Secrets and variables → Actions → New repository secret**,
       named `NPM_TOKEN`
+
+- [ ] Create a **fine-grained personal access token** and add it as `RELEASE_PLEASE_TOKEN`
+      — Settings → Developer settings → Personal access tokens → Fine-grained, scoped to
+      this repository, with **Contents: read/write** and **Pull requests: read/write**.
+
+  > **Without it the release pull request gets no checks and can never be merged.**
+  > GitHub refuses to trigger workflows from events raised with `GITHUB_TOKEN`, so every
+  > check on the release PR sits at `action_required` with a 0s runtime — and the branch
+  > ruleset requires five of them. A PAT is not subject to that restriction.
+  >
+  > Symptom if you skip it: `gh pr checks <n>` prints "no checks reported".
+
 - [ ] Confirm the package name is still unclaimed: `npm view iobroker-sync` should 404
 
 ## 3. Final content pass
@@ -73,7 +85,9 @@ release-please only bumps on `feat` and `fix` commits. Everything merged so far 
 `ci`/`chore`/`docs`/`test`, so **no release PR will appear on its own**, and the first
 release has to be asked for explicitly.
 
-To go straight to 1.0.0, land an empty commit naming the version:
+Note it bumps by commit type, so a `feat` since the last release means a **minor** bump —
+which is why the open PR proposes 0.2.0 rather than 0.1.1. To go straight to 1.0.0, land
+an empty commit naming the version:
 
 ```bash
 git commit --allow-empty -m "chore: release 1.0.0" -m "Release-As: 1.0.0"
@@ -84,9 +98,12 @@ release-please then opens a "chore(main): release 1.0.0" PR that bumps
 `package.json`, rewrites `CHANGELOG.md` and updates
 `.release-please-manifest.json`. Merging that PR creates the `v1.0.0` tag.
 
-- [ ] Land the `Release-As` commit
-- [ ] Review and merge the release PR it opens
-- [ ] Confirm the `v1.0.0` tag exists
+- [ ] Land the `Release-As` commit — release-please updates the **existing** release PR
+      in place, so there is no need to close it first
+- [ ] Check the PR now says 1.0.0 and that its checks actually ran
+- [ ] Review and merge it
+- [ ] Confirm the tag is `v1.0.0` (not `iobroker-sync-v1.0.0` — that would mean
+      `include-component-in-tag` crept back on)
 
 ## 4. Publish and flip — in this order
 

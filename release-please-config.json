@@ -8,15 +8,44 @@
       "include-v-in-tag": true,
       "bump-minor-pre-major": false,
       "changelog-sections": [
-        { "type": "feat", "section": "Added" },
-        { "type": "fix", "section": "Fixed" },
-        { "type": "perf", "section": "Performance" },
-        { "type": "refactor", "section": "Changed" },
-        { "type": "docs", "section": "Documentation", "hidden": true },
-        { "type": "test", "section": "Tests", "hidden": true },
-        { "type": "ci", "section": "CI", "hidden": true },
-        { "type": "chore", "section": "Chores", "hidden": true }
-      ]
+        {
+          "type": "feat",
+          "section": "Added"
+        },
+        {
+          "type": "fix",
+          "section": "Fixed"
+        },
+        {
+          "type": "perf",
+          "section": "Performance"
+        },
+        {
+          "type": "refactor",
+          "section": "Changed"
+        },
+        {
+          "type": "docs",
+          "section": "Documentation",
+          "hidden": true
+        },
+        {
+          "type": "test",
+          "section": "Tests",
+          "hidden": true
+        },
+        {
+          "type": "ci",
+          "section": "CI",
+          "hidden": true
+        },
+        {
+          "type": "chore",
+          "section": "Chores",
+          "hidden": true
+        }
+      ],
+      "include-component-in-tag": false
     }
   }
 }
