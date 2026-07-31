@@ -411,8 +411,14 @@ Before changing sync logic, note the invariants the tests exist to protect:
 Commands never call `console.*` — output goes through `ctx.log`, which is what makes
 `--json` and the tests possible. ESLint enforces this everywhere except `cli.ts`.
 
+**[AGENTS.md](AGENTS.md) has the full picture**: the wire protocol, why each lint rule is
+on or off, and what is deliberately untested. Read it before changing sync logic.
+
 ## Docs
 
+- **[AGENTS.md](AGENTS.md)** — architecture, the Admin wire protocol, safety invariants,
+  and the reasoning behind the lint rules. Written for AI coding agents, but it is the
+  fastest way for a human to understand the codebase too.
 - **[docs/AUTOMATION.md](docs/AUTOMATION.md)** — `--json` record shapes, CI and agent usage
 - **[CHANGELOG.md](CHANGELOG.md)** — release history
 

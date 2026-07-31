@@ -16,6 +16,5 @@ dist-test/
 # TLS test certificate, generated on first test run (never committed)
 test/fixtures/*.pem
 
-# Personal working notes — kept locally, never published
-AGENTS.md
+# Personal release checklist — kept locally, never published
 docs/GOING-PUBLIC.md

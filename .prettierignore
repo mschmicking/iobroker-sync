@@ -8,6 +8,5 @@ test/fixtures/*.pem
 # negotiable and format:check would fail the release PR forever.
 CHANGELOG.md
 
-# Personal working notes
-AGENTS.md
+# Personal release checklist
 docs/GOING-PUBLIC.md
