@@ -5,6 +5,14 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1](https://github.com/mschmicking/iobroker-sync/compare/v1.0.0...v1.0.1) (2026-07-31)
+
+
+### Fixed
+
+* **build:** add the npm metadata provenance and the npm page need ([8c2f5db](https://github.com/mschmicking/iobroker-sync/commit/8c2f5dbc637faa3b18dfb475a9225b7aa930d547))
+* **cli:** report the real version instead of a hardcoded 0.1.0 ([#17](https://github.com/mschmicking/iobroker-sync/issues/17)) ([3f62ac0](https://github.com/mschmicking/iobroker-sync/commit/3f62ac0e755c4c937f21d785ba34f770babc5aaa))
+
 ## [1.0.0](https://github.com/mschmicking/iobroker-sync/compare/v0.1.0...v1.0.0) (2026-07-31)
 
 
