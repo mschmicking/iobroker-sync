@@ -52,10 +52,15 @@ These change how merges behave, and the release automation depends on them.
 ## 2. Secrets and tokens
 
 - [ ] Create an npm account if you do not have one, and enable 2FA on it
-- [ ] Create an **automation** access token on npm (Access Tokens → Generate → Automation)
-      — a publish token will prompt for 2FA and hang in CI
-- [ ] Add it as **Settings → Secrets and variables → Actions → New repository secret**,
-      named `NPM_TOKEN`
+
+> **Do not create an automation token.** npm's own dialog warns that bypassing 2FA is a
+> security risk and points at Trusted Publishing instead — that warning is right, and
+> this repository uses Trusted Publishing (OIDC). There is no `NPM_TOKEN` secret: the
+> release workflow proves its identity to npm per run and receives a short-lived
+> credential, so there is nothing to leak or rotate.
+>
+> The catch is that **a package must already exist before a trusted publisher can be
+> attached to it**, so the very first publish is done by hand. That is step 4.
 
 - [ ] Create a **fine-grained personal access token** and add it as `RELEASE_PLEASE_TOKEN`
       — Settings → Developer settings → Personal access tokens → Fine-grained, scoped to
@@ -107,22 +112,47 @@ release-please then opens a "chore(main): release 1.0.0" PR that bumps
 
 ## 4. Publish and flip — in this order
 
-`npm publish --provenance` attaches a signed attestation that the tarball was built from
-a specific commit in this repository. **It only works on a public repository**, so the
-release workflow fails while private. That forces this sequence:
+Provenance and OIDC both require a **public** repository, and a trusted publisher can
+only be attached to a package that already exists. That fixes the order:
 
 1. [ ] **Make the repository public** (Settings → General → Danger Zone)
-2. [ ] **Wait for CodeQL to finish its first run**, and read the findings. It has been
-       skipping itself this whole time, so its output is genuinely unknown. Going public
-       is reversible; `npm publish` is not — so look before you publish.
-3. [ ] Remove the `> **Not released yet.**` blockquote from the README quick start, and
-       the `RELEASE CHECKLIST` HTML comment beside it
-4. [ ] Run **Actions → Release to npm** with `dry_run: true` and read the file list
-5. [ ] Run it again with `dry_run: false`
-6. [ ] Verify: `npm view iobroker-sync`, then in a clean directory
-       `npm i -g iobroker-sync && iob-sync --help`
 
-> The window between step 1 and step 5 is the only time the README promises a package
+2. [ ] **Wait for CodeQL's first run** and read the findings. It has skipped itself the
+       whole time, so its output is genuinely unknown. Going public is reversible;
+       `npm publish` is not.
+
+3. [ ] Remove the `> **Not released yet.**` note from the README quick start and the
+       `RELEASE CHECKLIST` comment beside it.
+
+4. [ ] **Publish once by hand**, from a machine where npm works — no token involved:
+
+       npm login          # interactive, honours your 2FA
+           npm publish --access public
+
+           This is the only publish that needs a human. It exists purely so the package name
+           is registered and can be configured.
+
+5. [ ] **Attach the trusted publisher** at
+       `npmjs.com/package/iobroker-sync/access` → Trusted Publisher → GitHub Actions:
+
+       | Field | Value |
+           | --- | --- |
+           | Organization or user | `mschmicking` |
+           | Repository | `iobroker-sync` |
+           | Workflow filename | `release.yml` |
+           | Environment | *(leave empty)* |
+           | Allowed actions | `npm publish` |
+
+           All fields are **case-sensitive and exact**.
+
+6. [ ] From here on, releases run themselves: **Actions → Release to npm**, first with
+       `dry_run: true` to read the file list, then `dry_run: false`.
+
+7. [ ] Verify: `npm view iobroker-sync`, then in a clean directory
+       `npm i -g iobroker-sync && iob-sync --help`. The npm page should show a
+       **Provenance** badge — it is generated automatically under OIDC.
+
+> The window between step 1 and step 4 is the only time the README promises a package
 > that does not exist. Keep it short.
 
 ## 5. After going public

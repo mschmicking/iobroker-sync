@@ -16,8 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Required for npm provenance, which attests that this tarball was built
-      # from this commit in this repository. Only works on a public repository.
+      # Required for OIDC — this is what npm exchanges for a short-lived
+      # publish credential, and what provenance is derived from. Only works on a
+      # public repository.
       id-token: write
 
     steps:
@@ -25,9 +26,16 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # 24 rather than 22: trusted publishing needs npm >= 11.5.1, and Node 22
+          # still ships npm 10.x.
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
+
+      - name: Ensure an npm new enough for trusted publishing
+        run: |
+          npm install -g npm@^11
+          npm --version
 
       - run: npm ci
 
@@ -58,11 +66,17 @@ jobs:
         if: inputs.dry_run
         run: npm publish --dry-run
 
+      # No NODE_AUTH_TOKEN. Publishing uses npm trusted publishing (OIDC): npm
+      # verifies this workflow's identity against the trusted publisher configured
+      # on the package, so there is no long-lived token to leak or rotate. npm's own
+      # UI warns against automation tokens that bypass 2FA, and this is the
+      # alternative it points at.
+      #
+      # Provenance is automatic under OIDC for a public package from a public repo,
+      # so --provenance is not passed explicitly.
       - name: Publish
         if: ${{ !inputs.dry_run }}
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Tag the released commit
         if: ${{ !inputs.dry_run }}
