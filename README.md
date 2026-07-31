@@ -204,6 +204,7 @@ test -z "$(iob-sync --json status | jq -rc 'select(.state != "in-sync")')"
 - **[AGENTS.md](AGENTS.md)** — architecture, wire protocol, safety invariants. Written for
   AI coding agents, but the fastest way for a human to understand the codebase too.
 - **[CHANGELOG.md](CHANGELOG.md)** — release history
+- **[SECURITY.md](SECURITY.md)** — how to report a vulnerability, and the deliberate trade-offs
 
 ## License
 
