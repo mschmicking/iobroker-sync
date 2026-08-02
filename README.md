@@ -113,6 +113,7 @@ If `logs` shows nothing, that is usually the adapter's own log level rather than
 | `init`             | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions. |
 | `types`            | Set up editor intellisense (`log`, `schedule`, ...). `--force`, `--offline`.                                                                                            |
 | `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                             |
+| `trust`            | Accept the instance's current TLS certificate. Only needed after it changes. `--yes` skips the prompt.                                                                  |
 | `pull [pattern]`   | Download scripts to disk. Never deletes or overwrites local files.                                                                                                      |
 | `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                          |
 | `status`           | Show what changed, locally and remotely.                                                                                                                                |
@@ -189,8 +190,9 @@ test -z "$(iob-sync --json status | jq -rc 'select(.state != "in-sync")')"
 
 - **Verified against Admin 7.x only.** Older versions are likely to work — the legacy
   login path exists for them — but the wire protocol has not been checked against them.
-- **Self-signed certificates** are accepted only when `allowSelfSigned` is set, and any
-  certificate is accepted; there is no pinning.
+- **Self-signed certificates** are accepted only when `allowSelfSigned` is set. The
+  certificate is then pinned on first connection and verified on every one after that,
+  so a change is caught — but the first connection itself is trusted blindly.
 - **`Blockly` and `Rules` scripts** are pulled for completeness, but their sources are
   generated and editing them by hand is not supported.
 

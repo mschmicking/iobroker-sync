@@ -63,6 +63,29 @@ Admin authenticates via OAuth2.
 Connect to the **admin adapter** port, usually 8081 — not the socket.io adapter port
 (8084), which lacks the permissions this tool needs.
 
-`allowSelfSigned` applies to both the HTTPS login and the websocket. It accepts any
-certificate; there is no way to pin a specific one. Without it, an untrusted certificate
-fails before any credential is sent, and the error names the setting that fixes it.
+`allowSelfSigned` applies to both the HTTPS login and the websocket. Without it, an
+untrusted certificate fails before any credential is sent, and the error names the
+setting that fixes it.
+
+### The certificate is pinned
+
+Switching off certificate validation would otherwise mean the tool sends your password
+to anything answering on that address. So the certificate is remembered instead:
+
+1. On the first connection its SHA-256 fingerprint is written to `certFingerprint` in
+   `.iobroker-sync.json` and reported once. Nothing to type, nothing to look up.
+2. Every connection after that must present the same certificate.
+3. If it changes, you are asked before anything is sent — and in a script or CI job,
+   where there is nobody to ask, the command fails instead.
+
+This is what `ssh` does with `known_hosts`, including the weak spot: the _first_
+connection is trusted blindly. On a network you do not trust, verify the fingerprint
+against the server before the first run.
+
+A certificate normally changes only because ioBroker was reinstalled or its certificate
+regenerated. To accept the new one:
+
+```bash
+iob-sync trust          # shows the fingerprint and asks
+iob-sync trust --yes    # no prompt, for unattended use
+```

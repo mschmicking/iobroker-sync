@@ -55,14 +55,14 @@ describe('getAuthCookie', () => {
   it('returns no cookie when authentication is disabled', async () => {
     server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
 
-    assert.equal(await getAuthCookie(url, null, false, NO_PROMPT), undefined);
+    assert.equal(await getAuthCookie(url, null, { allowSelfSigned: false }, NO_PROMPT), undefined);
   });
 
   it('never sends a password to an instance that does not require one', async () => {
     server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
     process.env.IOBROKER_PASSWORD = 'secret';
 
-    await getAuthCookie(url, 'admin', false, NO_PROMPT);
+    await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT);
 
     assert.deepEqual(
       server.httpRequests.map((r) => `${r.method} ${r.path}`),
@@ -75,7 +75,7 @@ describe('getAuthCookie', () => {
     server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
     process.env.IOBROKER_PASSWORD = 'secret';
 
-    const cookie = await getAuthCookie(url, 'admin', false, NO_PROMPT);
+    const cookie = await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT);
 
     assert.equal(cookie, 'access_token=fake-oauth-token');
 
@@ -90,7 +90,7 @@ describe('getAuthCookie', () => {
     server.auth = { mode: 'legacy', username: 'admin', password: 'secret' };
     process.env.IOBROKER_PASSWORD = 'secret';
 
-    const cookie = await getAuthCookie(url, 'admin', false, NO_PROMPT);
+    const cookie = await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT);
 
     assert.equal(cookie, 'connect.sid=fake-session-id');
     assert.ok(
@@ -107,7 +107,7 @@ describe('getAuthCookie', () => {
     server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
 
     await assert.rejects(
-      () => getAuthCookie(url, 'admin', false, NO_PROMPT),
+      () => getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
       (err: unknown) => {
         assert.ok(err instanceof UserError);
         assert.match(err.message, /requires authentication/i);
@@ -124,7 +124,7 @@ describe('getAuthCookie', () => {
     // undefined here would look exactly like "auth disabled" and produce a
     // confusing websocket failure later instead of a login error now.
     await assert.rejects(
-      () => getAuthCookie(url, 'admin', false, NO_PROMPT),
+      () => getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
       (err: unknown) => {
         assert.ok(err instanceof UserError);
         assert.match(err.message, /login/i);
@@ -136,7 +136,7 @@ describe('getAuthCookie', () => {
   it('reports an unreachable instance as a connection problem', async () => {
     await assert.rejects(
       // Port 1 is not listening; this must not surface as a login failure.
-      () => getAuthCookie('http://127.0.0.1:1', null, false, NO_PROMPT),
+      () => getAuthCookie('http://127.0.0.1:1', null, { allowSelfSigned: false }, NO_PROMPT),
       (err: unknown) => {
         assert.ok(err instanceof UserError);
         assert.match(err.message, /could not reach/i);
@@ -148,7 +148,10 @@ describe('getAuthCookie', () => {
   it('tolerates a trailing slash on the configured URL', async () => {
     server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
 
-    assert.equal(await getAuthCookie(`${url}/`, null, false, NO_PROMPT), undefined);
+    assert.equal(
+      await getAuthCookie(`${url}/`, null, { allowSelfSigned: false }, NO_PROMPT),
+      undefined,
+    );
     assert.deepEqual(
       server.httpRequests.map((r) => r.path),
       ['/login'],
@@ -161,7 +164,7 @@ describe('getAuthCookie', () => {
     await saveStoredPassword(url, 'admin', 'secret');
 
     assert.equal(
-      await getAuthCookie(url, 'admin', false, NO_PROMPT),
+      await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
       'access_token=fake-oauth-token',
     );
   });
@@ -172,7 +175,7 @@ describe('getAuthCookie', () => {
     process.env.IOBROKER_PASSWORD = 'from-env';
 
     assert.equal(
-      await getAuthCookie(url, 'admin', false, NO_PROMPT),
+      await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
       'access_token=fake-oauth-token',
     );
   });
@@ -182,7 +185,7 @@ describe('getAuthCookie', () => {
     await saveStoredPassword(url, 'admin', 'no-longer-valid');
 
     await assert.rejects(
-      () => getAuthCookie(url, 'admin', false, NO_PROMPT),
+      () => getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
       (err: unknown) => {
         assert.ok(err instanceof UserError);
         assert.match(String(err.hint), /iob-sync login/);
@@ -197,11 +200,16 @@ describe('getAuthCookie', () => {
     process.env.IOBROKER_PASSWORD = password;
 
     const logged: string[] = [];
-    const err = await getAuthCookie(url, 'admin', false, {
-      ...NO_PROMPT,
-      warn: (m) => logged.push(m),
-      info: (m) => logged.push(m),
-    }).then(
+    const err = await getAuthCookie(
+      url,
+      'admin',
+      { allowSelfSigned: false },
+      {
+        ...NO_PROMPT,
+        warn: (m) => logged.push(m),
+        info: (m) => logged.push(m),
+      },
+    ).then(
       () => undefined,
       (e: unknown) => e as Error,
     );
@@ -221,7 +229,7 @@ describe('getAuthCookie', () => {
     // allowPrompt defaults to isInteractive(); forcing it true here proves the
     // isInteractive() guard still refuses rather than blocking on a non-TTY stdin.
     await assert.rejects(
-      () => getAuthCookie(url, 'admin', false, { allowPrompt: true }),
+      () => getAuthCookie(url, 'admin', { allowSelfSigned: false }, { allowPrompt: true }),
       UserError,
     );
   });

@@ -15,6 +15,7 @@ import { loadConfig } from './config';
 import { AdminSocketClient } from './client/socket';
 import { AdminObjectsApi } from './client/objects';
 import { getAuthCookie } from './client/auth';
+import { ensureTrustedCertificate } from './client/tls';
 
 import { runInit } from './commands/init';
 import { pull } from './commands/pull';
@@ -32,6 +33,7 @@ import { rename } from './commands/rename';
 import { move } from './commands/move';
 import { remove } from './commands/remove';
 import { login, logout } from './commands/login';
+import { trust } from './commands/trust';
 import { setupTypes } from './commands/types';
 
 /**
@@ -124,7 +126,17 @@ async function withContext(
   const startDir = globals.cwd ? path.resolve(globals.cwd) : process.cwd();
   const { root, config } = await loadConfig(startDir);
 
-  const cookie = await getAuthCookie(config.url, config.username, config.allowSelfSigned, {
+  // Before anything is sent. `ensureTrustedCertificate` may update `config` in place
+  // (trust on first use, or an accepted certificate change), so it must run ahead of
+  // getAuthCookie — that is the call that carries the password.
+  await ensureTrustedCertificate(root, config, { log: logger });
+
+  const tlsConfig = {
+    allowSelfSigned: config.allowSelfSigned,
+    certFingerprint: config.certFingerprint,
+  };
+
+  const cookie = await getAuthCookie(config.url, config.username, tlsConfig, {
     passwordStdin: globals.passwordStdin,
     warn: (msg) => logger.warn(msg),
     info: (msg) => logger.info(msg),
@@ -133,7 +145,7 @@ async function withContext(
   const socket = new AdminSocketClient({
     url: config.url,
     cookie,
-    allowSelfSigned: config.allowSelfSigned,
+    ...tlsConfig,
   });
 
   await socket.connect();
@@ -242,7 +254,10 @@ program
   .action(function (this: Command) {
     return action(async () => {
       const startDir = resolveCwd();
-      const { config } = await loadConfig(startDir);
+      const { root, config } = await loadConfig(startDir);
+      // `login` does not go through withContext, so the certificate check has to
+      // happen here — before a password is collected, let alone sent.
+      await ensureTrustedCertificate(root, config, { log: logger });
       await login(config, { passwordStdin: globals().passwordStdin }, logger);
     })();
   });
@@ -262,6 +277,18 @@ program
         { force: opts.force, offline: opts.offline },
         logger,
       );
+    })();
+  });
+
+program
+  .command('trust')
+  .description("record the instance's current TLS certificate as the expected one")
+  .option('-y, --yes', 'skip the confirmation prompt')
+  .action(function (this: Command) {
+    const opts = this.opts();
+    return action(async () => {
+      const { root, config } = await loadConfig(resolveCwd());
+      await trust(root, config, { yes: Boolean(opts.yes) }, logger);
     })();
   });
 

@@ -23,6 +23,7 @@ import {
   SocketOptions,
   UserError,
 } from '../types';
+import { createPinnedAgent, describePinFailure } from './tls';
 
 const READY_MESSAGE = '___ready___';
 const OBJECT_CHANGE = 'objectChange';
@@ -111,8 +112,18 @@ export class AdminSocketClient implements SocketClient {
     if (this.options.cookie) {
       wsOptions.headers = { Cookie: this.options.cookie };
     }
-    if (this.options.allowSelfSigned) {
-      wsOptions.rejectUnauthorized = false;
+    // Never a literal `false`: whether the certificate chain is checked is the user's
+    // `allowSelfSigned` decision, and writing it as a constant would claim otherwise.
+    // When validation is off, identity comes from the pinned fingerprint instead —
+    // the agent below drops the connection before the Cookie header is written if the
+    // certificate is not the expected one. See `src/client/tls.ts`.
+    wsOptions.rejectUnauthorized = !this.options.allowSelfSigned;
+    const agent = createPinnedAgent(this.options.url, {
+      allowSelfSigned: Boolean(this.options.allowSelfSigned),
+      certFingerprint: this.options.certFingerprint,
+    });
+    if (agent) {
+      wsOptions.agent = agent;
     }
 
     this.connectPromise = new Promise<void>((resolve, reject) => {
@@ -196,10 +207,11 @@ export class AdminSocketClient implements SocketClient {
           clearTimeout(connectTimer);
           this.connectPromise = null;
           reject(
-            new UserError(
-              `Could not connect to ioBroker Admin at ${this.options.url}: ${err.message}`,
-              'Check the URL/port and that the Admin instance is reachable.',
-            ),
+            describePinFailure(err) ??
+              new UserError(
+                `Could not connect to ioBroker Admin at ${this.options.url}: ${err.message}`,
+                'Check the URL/port and that the Admin instance is reachable.',
+              ),
           );
           return;
         }

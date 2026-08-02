@@ -190,8 +190,22 @@ enabled is also on HTTPS — usually with a self-signed certificate. `allowSelfS
 used to be honoured only on the websocket; the HTTP login path used global `fetch`,
 which cannot accept an untrusted certificate without an `undici` Agent, so login died
 at the handshake before sending anything. `client/auth.ts` therefore uses `node:https`
-directly rather than `fetch`. `test/fixtures/` holds a committed throwaway certificate
+directly rather than `fetch`. `test/fixtures/` holds a generated throwaway certificate
 so this path is tested against a real handshake.
+
+Because `allowSelfSigned` removes the only proof of who the server is, identity comes
+from a pinned SHA-256 fingerprint instead (`client/tls.ts`, `certFingerprint` in the
+config): recorded on first use, checked on every connection, and a mismatch stops the
+command **before** credentials are sent. Two layers, both needed — `probeCertificate`
+reads the certificate without sending anything, which is what makes it possible to ask
+the user at a point where the answer still matters; the pinned `https.Agent` re-checks
+on every connection, because an attacker can relay the probe untouched and interfere
+only with the connection carrying the password.
+
+`rejectUnauthorized` is never assigned a literal `false` anywhere in `src/`. It is
+always `!allowSelfSigned` — the value is the user's decision, not a constant, and
+writing it as one both misreports what the code does and trips CodeQL's
+`js/disabling-certificate-validation`.
 
 ### Two bugs the watch tests caught
 

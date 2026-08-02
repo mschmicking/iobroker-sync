@@ -71,13 +71,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** SHA-256 as OpenSSL/Node print it: 32 colon-separated hex bytes. */
+const FINGERPRINT_PATTERN = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/i;
+
 /** Validates parsed JSON against the `Config` shape and the extra rules in the spec. */
 function assertValidConfig(parsed: unknown, sourcePath: string): Config {
   if (!isPlainObject(parsed)) {
     throw new UserError(`Config file "${sourcePath}" must contain a JSON object.`, INIT_HINT);
   }
 
-  const { url, scriptRoot, allowSelfSigned, username, defaultInstance } = parsed;
+  const { url, scriptRoot, allowSelfSigned, certFingerprint, username, defaultInstance } = parsed;
 
   if (typeof url !== 'string' || url.length === 0) {
     throw new UserError(`Config file "${sourcePath}" is missing a valid "url" string.`, INIT_HINT);
@@ -93,6 +96,18 @@ function assertValidConfig(parsed: unknown, sourcePath: string): Config {
       `Config file "${sourcePath}" is missing a valid "allowSelfSigned" boolean.`,
       INIT_HINT,
     );
+  }
+  // Optional: absent in every config written before pinning existed, and a missing
+  // pin is the normal state on first run. Only the shape is checked here — whether
+  // it matches the live certificate is a question for `src/client/tls.ts`.
+  if (certFingerprint !== undefined) {
+    if (typeof certFingerprint !== 'string' || !FINGERPRINT_PATTERN.test(certFingerprint)) {
+      throw new UserError(
+        `Config file "${sourcePath}" has an invalid "certFingerprint".`,
+        'It must be a SHA-256 fingerprint, e.g. "A1:B2:...:9F" (32 hex bytes). ' +
+          'Delete the field and reconnect to record it again, or run `iob-sync trust`.',
+      );
+    }
   }
   if (username !== null && typeof username !== 'string') {
     throw new UserError(
@@ -110,7 +125,14 @@ function assertValidConfig(parsed: unknown, sourcePath: string): Config {
   validateUrl(url);
   validateScriptRoot(scriptRoot);
 
-  return { url, scriptRoot, allowSelfSigned, username, defaultInstance };
+  return {
+    url,
+    scriptRoot,
+    allowSelfSigned,
+    ...(certFingerprint === undefined ? {} : { certFingerprint: certFingerprint.toUpperCase() }),
+    username,
+    defaultInstance,
+  };
 }
 
 /**

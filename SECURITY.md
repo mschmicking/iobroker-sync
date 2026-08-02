@@ -38,6 +38,9 @@ If you are looking for somewhere to start:
 - **`src/sync/safe-path.ts`** — server-controlled ioBroker ids become local file paths.
   Guards against traversal, symlinked files and symlinked directories.
 - **`src/client/auth.ts`** — OAuth2 and legacy login, TLS handling.
+- **`src/client/tls.ts`** — certificate pinning. The check that replaces CA validation
+  when `allowSelfSigned` is on, and the thing standing between the stored password and
+  whatever is answering on that address.
 - **`src/commands/backup.ts`** — snapshots contain whatever secrets the live scripts do,
   and land under the gitignored `.iobroker-sync/`.
 
@@ -52,10 +55,14 @@ These are known trade-offs, documented so they need not be re-reported:
 - **There is no `--password` flag.** `argv` is readable by any local process via `ps` and
   is recorded in shell history. Use `--password-stdin`, `IOBROKER_PASSWORD`, the saved
   credential, or the interactive prompt.
-- **`allowSelfSigned` accepts any certificate.** It exists because ioBroker refuses
-  passwords over plain HTTP, so authenticated instances are HTTPS with a self-signed
-  certificate. There is no certificate pinning; on an untrusted network, that is a
-  meaningful limitation.
+- **`allowSelfSigned` turns off CA validation, and the first connection is trusted
+  blindly.** The flag exists because ioBroker refuses passwords over plain HTTP, so
+  authenticated instances are HTTPS with a self-signed certificate. Identity then comes
+  from the pinned fingerprint in `certFingerprint` instead (`src/client/tls.ts`):
+  recorded on first use, verified on every connection afterwards, and a change stops the
+  command before anything is sent. The residual weakness is the same one `ssh` has —
+  an attacker already in position for the _very first_ connection is trusted and pinned.
+  Verify the fingerprint out of band if that matters to you.
 - **`push` cannot disable a script or move it between javascript instances.** It sends
   only `common.source` and `common.engineType`, enforced by the type of
   `ObjectsApi.extendScript`. This is a safety property, not an oversight.
@@ -71,3 +78,5 @@ These are known trade-offs, documented so they need not be re-reported:
   `common.engineType`.
 - Anything that lets a malicious ioBroker server cause local code execution or
   arbitrary file writes.
+- Any way to reach the network with credentials that skips the fingerprint check in
+  `src/client/tls.ts`, or to make a mismatch continue rather than stop.
