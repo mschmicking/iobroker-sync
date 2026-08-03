@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/mschmicking/iobroker-sync/compare/v1.0.1...v1.1.0) (2026-08-03)
+
+
+### Added
+
+* **auth:** pin the ioBroker TLS certificate on first use ([#21](https://github.com/mschmicking/iobroker-sync/issues/21)) ([360cf07](https://github.com/mschmicking/iobroker-sync/commit/360cf07b0ee1b0c6b601a02e12e37dd48f3f565a))
+
 ## [1.0.1](https://github.com/mschmicking/iobroker-sync/compare/v1.0.0...v1.0.1) (2026-07-31)
 
 
