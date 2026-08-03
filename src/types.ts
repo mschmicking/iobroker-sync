@@ -116,6 +116,12 @@ export interface SocketOptions {
   cookie?: string;
   /** Accept self-signed TLS certificates. */
   allowSelfSigned?: boolean;
+  /**
+   * Pinned SHA-256 certificate fingerprint. When set, the server's certificate must
+   * match it exactly; this is what supplies the identity check that `allowSelfSigned`
+   * takes away. See `src/client/tls.ts`.
+   */
+  certFingerprint?: string;
   /** Milliseconds to wait for `___ready___` before failing. Default 15000. */
   connectTimeoutMs?: number;
   /** Milliseconds to wait for a single request's callback. Default 20000. */
@@ -200,6 +206,16 @@ export interface Config {
   /** Folder holding synced scripts, relative to the project root. */
   scriptRoot: string;
   allowSelfSigned: boolean;
+  /**
+   * SHA-256 fingerprint of the certificate this instance is expected to present,
+   * as colon-separated uppercase hex. Recorded automatically on the first connection
+   * that uses `allowSelfSigned`, and verified on every one after that.
+   *
+   * Optional: configs written before pinning existed have no such field, and they
+   * must keep working. Not a secret — a fingerprint is public information — so it
+   * belongs in the committed project config rather than the credentials store.
+   */
+  certFingerprint?: string;
   /** Only needed when the instance has authentication enabled. */
   username: string | null;
   /** Instance assigned to newly created scripts, e.g. "system.adapter.javascript.0". */

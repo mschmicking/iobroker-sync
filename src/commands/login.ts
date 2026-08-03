@@ -44,10 +44,15 @@ export async function login(config: Config, opts: LoginOptions, log: Logger): Pr
   const previous = process.env.IOBROKER_PASSWORD;
   process.env.IOBROKER_PASSWORD = password;
   try {
-    const cookie = await getAuthCookie(config.url, config.username, config.allowSelfSigned, {
-      allowPrompt: false,
-      warn: (msg) => log.warn(msg),
-    });
+    const cookie = await getAuthCookie(
+      config.url,
+      config.username,
+      { allowSelfSigned: config.allowSelfSigned, certFingerprint: config.certFingerprint },
+      {
+        allowPrompt: false,
+        warn: (msg) => log.warn(msg),
+      },
+    );
     if (!cookie) {
       log.warn(`${config.url} does not require authentication; nothing was saved.`);
       return;

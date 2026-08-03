@@ -24,16 +24,21 @@ somewhere else.
 
 ## `.iobroker-sync.json`
 
-| Field             | Meaning                                                            |
-| ----------------- | ------------------------------------------------------------------ |
-| `url`             | Admin base URL including scheme and port, e.g. `https://host:8081` |
-| `scriptRoot`      | Folder for synced scripts, relative to the project root            |
-| `allowSelfSigned` | Accept an untrusted TLS certificate                                |
-| `username`        | Admin username, or `null` when authentication is disabled          |
-| `defaultInstance` | javascript instance assigned to newly created scripts              |
+| Field             | Meaning                                                               |
+| ----------------- | --------------------------------------------------------------------- |
+| `url`             | Admin base URL including scheme and port, e.g. `https://host:8081`    |
+| `scriptRoot`      | Folder for synced scripts, relative to the project root               |
+| `allowSelfSigned` | Accept an untrusted TLS certificate                                   |
+| `certFingerprint` | Optional. SHA-256 of the certificate to expect; recorded on first use |
+| `username`        | Admin username, or `null` when authentication is disabled             |
+| `defaultInstance` | javascript instance assigned to newly created scripts                 |
 
 Commit this file — it holds no password. Credentials live outside the project entirely;
-see [AUTHENTICATION.md](AUTHENTICATION.md).
+see [AUTHENTICATION.md](AUTHENTICATION.md). A certificate fingerprint is public
+information, not a secret, so committing it is fine and makes the pin reviewable.
+
+`certFingerprint` is written for you the first time you connect to an `allowSelfSigned`
+instance; you never need to type it. Configs written before it existed keep working.
 
 ## `scriptRoot` cannot escape the project
 

@@ -69,3 +69,15 @@ credential is sent.
 
 Also check you are on the **admin** adapter port (usually 8081), not the socket.io port
 (8084).
+
+## "The TLS certificate has changed"
+
+Commands stop before sending anything, and print the pinned fingerprint next to the one
+the server presented.
+
+If you reinstalled ioBroker or regenerated its certificate, this is expected — run
+`iob-sync trust` to accept the new one (`--yes` when unattended). If you did **not**
+change anything on the server, do not accept it: something is answering in its place.
+
+To start over from scratch, delete the `certFingerprint` line from
+`.iobroker-sync.json`; the next connection records whatever it finds.

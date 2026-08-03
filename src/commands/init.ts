@@ -12,8 +12,9 @@ import * as path from 'node:path';
 import { AdminObjectsApi } from '../client/objects';
 import { getAuthCookie } from '../client/auth';
 import { AdminSocketClient } from '../client/socket';
+import { ensureTrustedCertificate } from '../client/tls';
 import { defaultConfig, writeConfig } from '../config';
-import { CONFIG_FILENAME, Logger, STATE_DIR, UserError } from '../types';
+import { CONFIG_FILENAME, Config, Logger, STATE_DIR, UserError } from '../types';
 import { isInteractive, promptText, promptYesNo } from '../prompt';
 import { setupTypes } from './types';
 
@@ -38,21 +39,37 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-/** Read-only probe: confirms the config actually works and reports what it finds. */
+/**
+ * Read-only probe: confirms the config actually works and reports what it finds.
+ *
+ * This is first contact, so it is also where the certificate gets pinned. Doing it
+ * inside the same `try` is deliberate — an instance that is not reachable yet must
+ * not turn `init` into a failure, since the config has already been written and the
+ * whole point of the probe is to report rather than to gate.
+ */
 async function probeConnection(
-  url: string,
-  username: string | null,
-  allowSelfSigned: boolean,
+  root: string,
+  config: Config,
   log: Logger,
   interactive?: boolean,
 ): Promise<void> {
+  const { url, username } = config;
   try {
-    const cookie = await getAuthCookie(url, username, allowSelfSigned, {
+    await ensureTrustedCertificate(root, config, {
+      log,
+      allowPrompt: interactive ?? true,
+    });
+    const tlsConfig = {
+      allowSelfSigned: config.allowSelfSigned,
+      certFingerprint: config.certFingerprint,
+    };
+
+    const cookie = await getAuthCookie(url, username, tlsConfig, {
       allowPrompt: interactive ?? true,
       warn: (msg) => log.warn(msg),
       info: (msg) => log.info(msg),
     });
-    const socket = new AdminSocketClient({ url, cookie, allowSelfSigned });
+    const socket = new AdminSocketClient({ url, cookie, ...tlsConfig });
     await socket.connect();
     try {
       const objects = new AdminObjectsApi(socket);
@@ -187,7 +204,7 @@ export async function runInit(cwd: string, rawOpts: InitOptions, log: Logger): P
   log.info(`Script root: ${path.join(root, config.scriptRoot)}`);
 
   await ensureGitignored(root, log);
-  await probeConnection(config.url, config.username, config.allowSelfSigned, log, opts.interactive);
+  await probeConnection(root, config, log, opts.interactive);
 
   if (opts.types) {
     await setupTypes(root, config.scriptRoot, { force: opts.force }, log);

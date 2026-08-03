@@ -61,7 +61,7 @@ describe(
       server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
       process.env.IOBROKER_PASSWORD = 'secret';
 
-      const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
+      const cookie = await getAuthCookie(url, 'admin', { allowSelfSigned: true }, NO_PROMPT);
 
       assert.equal(cookie, 'access_token=fake-oauth-token');
     });
@@ -70,7 +70,7 @@ describe(
       server.auth = { mode: 'legacy', username: 'admin', password: 'secret' };
       process.env.IOBROKER_PASSWORD = 'secret';
 
-      const cookie = await getAuthCookie(url, 'admin', true, NO_PROMPT);
+      const cookie = await getAuthCookie(url, 'admin', { allowSelfSigned: true }, NO_PROMPT);
 
       assert.equal(cookie, 'connect.sid=fake-session-id');
     });
@@ -78,7 +78,7 @@ describe(
     it('detects auth-disabled over https too', async () => {
       server.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
 
-      assert.equal(await getAuthCookie(url, null, true, NO_PROMPT), undefined);
+      assert.equal(await getAuthCookie(url, null, { allowSelfSigned: true }, NO_PROMPT), undefined);
     });
 
     it('refuses an untrusted certificate when allowSelfSigned is not set', async () => {
@@ -86,7 +86,7 @@ describe(
       process.env.IOBROKER_PASSWORD = 'secret';
 
       await assert.rejects(
-        () => getAuthCookie(url, 'admin', false, NO_PROMPT),
+        () => getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT),
         (err: unknown) => {
           assert.ok(err instanceof UserError);
           assert.match(err.message, /could not reach/i);
@@ -100,7 +100,7 @@ describe(
       process.env.IOBROKER_PASSWORD = 'secret';
 
       // A raw TLS error here is close to unactionable; the hint has to name the flag.
-      const err = (await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(
+      const err = (await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT).catch(
         (e: unknown) => e,
       )) as UserError;
 
@@ -111,7 +111,9 @@ describe(
       server.auth = { mode: 'oauth', username: 'admin', password: 'secret' };
       process.env.IOBROKER_PASSWORD = 'secret';
 
-      await getAuthCookie(url, 'admin', false, NO_PROMPT).catch(() => undefined);
+      await getAuthCookie(url, 'admin', { allowSelfSigned: false }, NO_PROMPT).catch(
+        () => undefined,
+      );
 
       // The handshake fails before any request body is written, so the server must
       // not have seen a credential at all.

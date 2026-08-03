@@ -12,6 +12,11 @@
  * usually also on HTTPS with a self-signed certificate — so honouring
  * `allowSelfSigned` here is not optional. The websocket path already honours it.
  *
+ * When a certificate is pinned, these requests go through the agent from
+ * `src/client/tls.ts`, which drops the connection before the request is written if
+ * the certificate is not the expected one. That check matters most here: this is the
+ * module that sends the password.
+ *
  * The password is never logged, never placed in argv, and never written to the
  * project config. See `src/credentials.ts`.
  */
@@ -22,6 +27,7 @@ import * as https from 'node:https';
 import { UserError } from '../types';
 import { readStoredPassword, saveStoredPassword } from '../credentials';
 import { isInteractive, promptPassword, promptYesNo, readPasswordFromStdin } from '../prompt';
+import { TlsConfig, createPinnedAgent, describePinFailure } from './tls';
 
 export interface AuthOptions {
   /** Read the password from stdin (`--password-stdin`) instead of env/store/prompt. */
@@ -57,7 +63,7 @@ function trimTrailingSlash(url: string): string {
  */
 function request(
   target: string,
-  opts: { method: string; body?: string; allowSelfSigned: boolean },
+  opts: { method: string; body?: string; tls: TlsConfig },
 ): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     let parsed: URL;
@@ -85,7 +91,10 @@ function request(
             }
           : {},
         // Only meaningful for https; ignored otherwise.
-        rejectUnauthorized: !opts.allowSelfSigned,
+        rejectUnauthorized: !opts.tls.allowSelfSigned,
+        // Undefined unless a certificate is pinned, in which case this is what
+        // enforces it. Node falls back to its global agent when it is absent.
+        agent: createPinnedAgent(target, opts.tls),
       },
       (res) => {
         // The body is not needed for any of these endpoints, but it must be drained
@@ -157,18 +166,22 @@ async function resolvePassword(
 export async function getAuthCookie(
   url: string,
   username: string | null,
-  allowSelfSigned: boolean,
+  tlsConfig: TlsConfig,
   opts: AuthOptions = {},
 ): Promise<string | undefined> {
   const base = trimTrailingSlash(url);
 
   let loginProbe: HttpResponse;
   try {
-    loginProbe = await request(`${base}/login`, { method: 'GET', allowSelfSigned });
+    loginProbe = await request(`${base}/login`, { method: 'GET', tls: tlsConfig });
   } catch (err) {
+    // A pin mismatch is not a reachability problem and must not be reported as one.
+    const pinFailure = describePinFailure(err);
+    if (pinFailure) throw pinFailure;
+
     const message = (err as Error).message;
     const selfSignedHint =
-      /self.signed|unable to verify|CERT_/i.test(message) && !allowSelfSigned
+      /self.signed|unable to verify|CERT_/i.test(message) && !tlsConfig.allowSelfSigned
         ? 'The certificate is not trusted. Set "allowSelfSigned": true in .iobroker-sync.json.'
         : 'Check that the URL in your config is correct and the instance is reachable.';
     throw new UserError(`Could not reach ioBroker Admin at ${base}: ${message}`, selfSignedHint);
@@ -196,7 +209,7 @@ export async function getAuthCookie(
   try {
     const oauthRes = await request(`${base}/oauth/token`, {
       method: 'POST',
-      allowSelfSigned,
+      tls: tlsConfig,
       body: new URLSearchParams({
         grant_type: 'password',
         username: user,
@@ -213,8 +226,11 @@ export async function getAuthCookie(
         return cookie;
       }
     }
-  } catch {
-    // Fall through to legacy login below.
+  } catch (err) {
+    // Fall through to legacy login below — unless the certificate was wrong, which
+    // no amount of retrying on another endpoint will fix.
+    const pinFailure = describePinFailure(err);
+    if (pinFailure) throw pinFailure;
   }
 
   // Fall back to legacy session-cookie login.
@@ -222,7 +238,7 @@ export async function getAuthCookie(
   try {
     legacyRes = await request(`${base}/login`, {
       method: 'POST',
-      allowSelfSigned,
+      tls: tlsConfig,
       body: new URLSearchParams({
         username: user,
         password,
@@ -230,7 +246,10 @@ export async function getAuthCookie(
       }).toString(),
     });
   } catch (err) {
-    throw new UserError(`Login request to ${base}/login failed: ${(err as Error).message}`);
+    throw (
+      describePinFailure(err) ??
+      new UserError(`Login request to ${base}/login failed: ${(err as Error).message}`)
+    );
   }
 
   const legacyCookie = extractCookie(legacyRes, 'connect.sid');
