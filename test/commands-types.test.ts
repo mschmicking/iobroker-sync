@@ -6,7 +6,9 @@
  * module semantics per file (no phantom name collisions) and a module target that
  * permits top-level await.
  *
- * The download is not exercised — it needs the network. `--offline` covers the rest.
+ * The download is exercised against a stubbed `fetch` rather than the network: what
+ * matters is that a response which is not the declaration file never reaches the disk.
+ * `--offline` covers the rest.
  */
 
 import { describe, it } from 'node:test';
@@ -21,6 +23,19 @@ async function readTsconfig(root: string, scriptRoot: string): Promise<Record<st
   const raw = await fs.readFile(path.join(root, scriptRoot, 'tsconfig.json'), 'utf8');
   return JSON.parse(raw) as Record<string, never>;
 }
+
+/** Run `fn` with `fetch` replaced by one that answers every call with `res`. */
+async function withStubbedFetch(res: Response, fn: () => Promise<void>): Promise<void> {
+  const real = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve(res.clone());
+  try {
+    await fn();
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+const DTS_PATH = ['.iobroker', 'types', 'javascript.d.ts'];
 
 describe('types', () => {
   it('writes a config that gives each script its own scope', async () => {
@@ -91,6 +106,67 @@ describe('types', () => {
         'utf8',
       );
       assert.match(globals, /function require/);
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('writes the declaration file when the download is the real thing', async () => {
+    const project = await makeTempProject();
+    try {
+      const dts = 'declare global {\n  function log(msg: string): void;\n}\n';
+      const { log } = makeCapturingLogger();
+      await withStubbedFetch(new Response(dts, { status: 200 }), async () => {
+        await setupTypes(project.root, 'scripts', {}, log);
+      });
+
+      assert.equal(await fs.readFile(path.join(project.root, ...DTS_PATH), 'utf8'), dts);
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('leaves a working copy alone when a portal answers 200 with a login page', async () => {
+    const project = await makeTempProject();
+    try {
+      const good = 'declare global {\n  function log(msg: string): void;\n}\n';
+      const dtsPath = path.join(project.root, ...DTS_PATH);
+      await fs.mkdir(path.dirname(dtsPath), { recursive: true });
+      await fs.writeFile(dtsPath, good, 'utf8');
+
+      const portal = '<!doctype html><html><body>Sign in to continue</body></html>';
+      const { log, captured } = makeCapturingLogger();
+      await withStubbedFetch(new Response(portal, { status: 200 }), async () => {
+        await setupTypes(project.root, 'scripts', {}, log);
+      });
+
+      assert.equal(await fs.readFile(dtsPath, 'utf8'), good, 'the HTML must not overwrite it');
+      assert.ok(
+        captured.warn.some((l) => /not a TypeScript declaration file/i.test(l)),
+        `expected a warning about the response, got ${JSON.stringify(captured.warn)}`,
+      );
+    } finally {
+      await project.cleanup();
+    }
+  });
+
+  it('refuses a body far too large to be the declaration file', async () => {
+    const project = await makeTempProject();
+    try {
+      const huge = `declare global {}\n${'x'.repeat(3 * 1024 * 1024)}`;
+      const { log, captured } = makeCapturingLogger();
+      await withStubbedFetch(new Response(huge, { status: 200 }), async () => {
+        await setupTypes(project.root, 'scripts', {}, log);
+      });
+
+      await assert.rejects(
+        () => fs.access(path.join(project.root, ...DTS_PATH)),
+        'nothing should have been written',
+      );
+      assert.ok(
+        captured.warn.some((l) => l.includes('KB')),
+        `expected a warning naming the size, got ${JSON.stringify(captured.warn)}`,
+      );
     } finally {
       await project.cleanup();
     }

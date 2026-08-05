@@ -22,6 +22,23 @@ import { Logger } from '../types';
 const JAVASCRIPT_DTS_URL =
   'https://raw.githubusercontent.com/ioBroker/ioBroker.javascript/refs/heads/master/src/lib/javascript.d.ts';
 
+/**
+ * Upper bound for the download. The real declaration file is well under 200 KB;
+ * anything past this is not it, and an unbounded response body has no business
+ * being buffered and then written into someone's project.
+ */
+const MAX_DTS_BYTES = 2 * 1024 * 1024;
+
+/**
+ * A captive portal, a corporate proxy, or a GitHub error page answers 200 with HTML,
+ * and `res.ok` cannot tell that from the real file. Writing a login page over a
+ * working javascript.d.ts breaks every script in the editor and presents as a
+ * TypeScript problem, so check what arrived before it goes near the disk.
+ */
+function looksLikeDeclarationFile(text: string): boolean {
+  return /^\s*declare\s/m.test(text);
+}
+
 const GLOBAL_DTS_CONTENT = `export {};
 declare global {
   function require(library: string): any;
@@ -122,7 +139,17 @@ export async function setupTypes(
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
+      const declared = Number(res.headers.get('content-length'));
+      if (Number.isFinite(declared) && declared > MAX_DTS_BYTES) {
+        throw new Error(`the response announces ${Math.round(declared / 1024)} KB`);
+      }
       const text = await res.text();
+      if (text.length > MAX_DTS_BYTES) {
+        throw new Error(`the response is ${Math.round(text.length / 1024)} KB`);
+      }
+      if (!looksLikeDeclarationFile(text)) {
+        throw new Error('the response is not a TypeScript declaration file');
+      }
       await fs.writeFile(dtsPath, text, 'utf8');
       log.info(`Downloaded javascript.d.ts (${Math.round(text.length / 1024)} KB)`);
     } catch (err) {
