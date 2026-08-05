@@ -122,12 +122,20 @@ export interface RecordedRequest {
   body: string;
 }
 
+/**
+ * Keys that must never be copied by `deepMerge`. `src` arrives as parsed JSON off the
+ * websocket, so an object id like `__proto__` would otherwise reach through the merge
+ * and rewrite the prototype instead of setting a property.
+ */
+const UNSAFE_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /** Deep-merge `src` into `dest`, mirroring the real server's `extendObject` behaviour. */
 function deepMerge(
   dest: Record<string, unknown>,
   src: Record<string, unknown>,
 ): Record<string, unknown> {
   for (const key of Object.keys(src)) {
+    if (UNSAFE_MERGE_KEYS.has(key)) continue;
     const srcVal = src[key];
     const destVal = dest[key];
     if (
