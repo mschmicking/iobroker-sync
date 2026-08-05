@@ -209,17 +209,18 @@ describe('watch', () => {
     try {
       server.emitObjectChange(ID, script(SOURCE_C));
 
+      // Wait for the `pull` line, not for the file: watch writes the file, saves the
+      // manifest and logs last (`applyRemote` in commands/watch.ts), so waiting on the
+      // content lets the assertions run in the window before the log call. That window
+      // is a millisecond alone and wide enough to lose under a loaded full-suite run.
       await waitFor(
-        async () => (await readLocal(project, REL)) === SOURCE_C,
-        'the remote change on disk',
+        () => t.captured.result.some((l) => l.startsWith('pull')),
+        'the remote change to be pulled',
       );
 
+      assert.equal(await readLocal(project, REL), SOURCE_C);
       const manifest = await readManifest(project.root);
       assert.equal(manifest.entries[ID]?.path, REL);
-      assert.ok(
-        t.captured.result.some((l) => l.startsWith('pull')),
-        `expected a pull line, got ${JSON.stringify(t.captured.result)}`,
-      );
     } finally {
       await handle.stop();
       await t.close();

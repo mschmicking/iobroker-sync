@@ -114,6 +114,7 @@ If `logs` shows nothing, that is usually the adapter's own log level rather than
 | `types`            | Set up editor intellisense (`log`, `schedule`, ...). `--force`, `--offline`.                                                                                            |
 | `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                             |
 | `trust`            | Accept the instance's current TLS certificate. Only needed after it changes. `--yes` skips the prompt.                                                                  |
+| `doctor`           | Check config, certificate, login, connection and a live round-trip, and say which one is wrong. Read-only, never prompts. Run this first when something looks broken.   |
 | `pull [pattern]`   | Download scripts to disk. Never deletes or overwrites local files.                                                                                                      |
 | `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                          |
 | `status`           | Show what changed, locally and remotely.                                                                                                                                |

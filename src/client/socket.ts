@@ -32,6 +32,21 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 15000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
 const CLIENT_NAME = 'iobroker-sync';
 
+/**
+ * Attached to every request timeout, because this is the only thing an unauthenticated
+ * caller ever sees.
+ *
+ * Admin accepts the connection and sends `___ready___` whether or not a session cookie
+ * came with it, and then simply ignores commands — no auth error, no close. A bare
+ * "timed out" therefore reads as a slow or broken instance, which sends people
+ * debugging the wrong thing entirely. Naming the likely cause here costs one line.
+ */
+const TIMEOUT_HINT =
+  'A socket that is open but ignores commands is what an unauthenticated or expired ' +
+  'session looks like — Admin sends no auth error. Run `iob-sync doctor`. If you are ' +
+  'driving AdminSocketClient yourself, it needs `cookie`, `allowSelfSigned` and ' +
+  '`certFingerprint` — see `withContext` in src/cli.ts.';
+
 type Frame = [number, number | null, string?, unknown?];
 
 /**
@@ -289,7 +304,12 @@ export class AdminSocketClient implements SocketClient {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new UserError(`Request "${command}" timed out after ${this.requestTimeoutMs}ms.`));
+        reject(
+          new UserError(
+            `Request "${command}" timed out after ${this.requestTimeoutMs}ms.`,
+            TIMEOUT_HINT,
+          ),
+        );
       }, this.requestTimeoutMs);
 
       this.pending.set(id, {

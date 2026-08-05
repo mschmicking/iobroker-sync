@@ -86,12 +86,53 @@ function hostAndPort(url: string): { host: string; port: number } {
 }
 
 /**
+ * What the server's certificate says about itself.
+ *
+ * The fingerprint is the only field the pin depends on. The rest exists for
+ * `iob-sync doctor`, which has to be able to say *why* a certificate is or is not a
+ * problem — "expired seven months ago, and that is fine here" is a sentence nobody
+ * can write from a fingerprint alone.
+ */
+export interface CertificateInfo {
+  /** SHA-256 fingerprint, colon-separated uppercase hex. */
+  fingerprint: string;
+  /** Distinguished name, flattened for display, e.g. `CN=iobroker`. */
+  subject: string;
+  issuer: string;
+  /** Undefined when the certificate carries a date Node could not parse. */
+  validFrom?: Date;
+  validTo?: Date;
+}
+
+/** `{ CN: 'iobroker', O: 'ioBroker' }` -> `CN=iobroker, O=ioBroker`. */
+function formatDn(dn: tls.PeerCertificate['subject'] | undefined): string {
+  if (!dn || typeof dn !== 'object') return '';
+  return Object.entries(dn)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(', ');
+}
+
+function parseCertDate(raw: string | undefined): Date | undefined {
+  if (!raw) return undefined;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+/**
  * Opens a TLS connection purely to read the certificate, then closes it.
  *
  * Nothing is written to the socket. That is the whole point: this runs before the
  * password is sent, so a certificate the user ends up rejecting never sees it.
  */
-export function probeCertificate(url: string, allowSelfSigned: boolean): Promise<string> {
+export async function probeCertificate(url: string, allowSelfSigned: boolean): Promise<string> {
+  return (await probeCertificateInfo(url, allowSelfSigned)).fingerprint;
+}
+
+/** As `probeCertificate`, but keeps the fields the fingerprint alone cannot explain. */
+export function probeCertificateInfo(
+  url: string,
+  allowSelfSigned: boolean,
+): Promise<CertificateInfo> {
   return new Promise((resolve, reject) => {
     let target: { host: string; port: number };
     try {
@@ -104,11 +145,11 @@ export function probeCertificate(url: string, allowSelfSigned: boolean): Promise
     // The handshake, the timeout and the error handler all race to end this; whichever
     // gets there first closes the socket and the rest become no-ops.
     let settled = false;
-    const succeed = (fingerprint: string): void => {
+    const succeed = (info: CertificateInfo): void => {
       if (settled) return;
       settled = true;
       socket.destroy();
-      resolve(fingerprint);
+      resolve(info);
     };
     const fail = (err: Error): void => {
       if (settled) return;
@@ -138,7 +179,13 @@ export function probeCertificate(url: string, allowSelfSigned: boolean): Promise
           );
           return;
         }
-        succeed(fingerprint.toUpperCase());
+        succeed({
+          fingerprint: fingerprint.toUpperCase(),
+          subject: formatDn(cert.subject),
+          issuer: formatDn(cert.issuer),
+          validFrom: parseCertDate(cert.valid_from),
+          validTo: parseCertDate(cert.valid_to),
+        });
       },
     );
 

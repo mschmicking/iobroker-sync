@@ -34,6 +34,7 @@ import { move } from './commands/move';
 import { remove } from './commands/remove';
 import { login, logout } from './commands/login';
 import { trust } from './commands/trust';
+import { doctor } from './commands/doctor';
 import { setupTypes } from './commands/types';
 
 /**
@@ -289,6 +290,20 @@ program
     return action(async () => {
       const { root, config } = await loadConfig(resolveCwd());
       await trust(root, config, { yes: Boolean(opts.yes) }, logger);
+    })();
+  });
+
+program
+  .command('doctor')
+  .description('check that iob-sync can reach and authenticate to the instance')
+  .option('--timeout <ms>', 'budget for the connect and round-trip probes', '8000')
+  .action(function (this: Command) {
+    const opts = this.opts();
+    return action(async () => {
+      // Not withContext: that connects first and aborts on the first failure, which
+      // is precisely the information this command is here to report.
+      const { root, config } = await loadConfig(resolveCwd());
+      await doctor(root, config, { timeoutMs: Number(opts.timeout) || undefined }, logger);
     })();
   });
 

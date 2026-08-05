@@ -2,6 +2,43 @@
 
 Things that look like bugs and are not. See the [README](../README.md) for the overview.
 
+**Start with `iob-sync doctor`.** It checks the config, the certificate, the login, the
+connection and a live round-trip, and names the one that is wrong — including the two
+cases below, which are the ones that reliably send people down the wrong path. It is
+read-only and never prompts, so it is safe to run at any time.
+
+## Commands time out, but the connection "works"
+
+Symptom: `___ready___` arrives, the socket reports connected, and then every request
+fails with `Request "getObject" timed out after 20000ms.`
+
+The session is not authenticated. ioBroker Admin does not answer an unauthenticated
+command with an error — it accepts the connection, sends `___ready___`, and then
+ignores the command entirely. There is nothing to find in the log, because nothing
+went wrong at the transport layer.
+
+Usually this means the stored password is stale (`iob-sync login` replaces it) or the
+session expired during a long-running `watch`. It also happens to anyone driving
+`AdminSocketClient` from their own code without an auth cookie: **iob-sync is a CLI,
+not a library** — there is no supported import path, and the wiring the commands rely
+on (certificate check, then cookie, then socket) lives in `withContext` in
+`src/cli.ts`. A client constructed without `cookie`, `allowSelfSigned` and
+`certFingerprint` connects perfectly and then does nothing.
+
+## `certificate has expired` from other tools on the same port
+
+`iob-sync` keeps working while every other client refuses to connect. Both are correct.
+
+A home ioBroker signs its own certificate, typically for one year, and nothing renews
+it. With `allowSelfSigned` the chain is not what establishes identity here — the pinned
+SHA-256 fingerprint is (see [AUTHENTICATION.md](AUTHENTICATION.md)) — and an expired
+certificate signs exactly as well as a fresh one. Anything validating the chain the
+normal way rejects it.
+
+`iob-sync doctor` reports this as OK with a note rather than as a fault. To make the
+other tools happy, regenerate the certificate on the instance and then run
+`iob-sync trust` to accept the new fingerprint.
+
 ## `logs` prints the banner and nothing else
 
 It is streaming; there is simply nothing to show. Two things surprise people:
