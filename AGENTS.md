@@ -116,6 +116,27 @@ infinite-loops on connection errors against this server.
 - No new npm dependencies without a good reason. Current set: `ws`, `commander`,
   `chokidar`, `diff`.
 
+### Commit and PR titles
+
+Conventional commits, enforced on the **PR title** by `.github/workflows/pr-title.yml`
+— the title becomes the squashed commit message and release-please derives the next
+version from it, so a title that does not parse is a release that silently never
+happens.
+
+Type is one of `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`,
+`chore`, `revert`. A scope is optional, **but any scope used must be one of**:
+
+```
+sync  auth  watch  logs  json  types  cli  deps  docs  release  main
+```
+
+That list is closed on purpose, to keep the vocabulary small enough to mean something.
+A new component does **not** earn a new scope — `feat(doctor)` fails the check, and a
+new CLI command belongs under `cli`. If a scope genuinely has to be added, add it to
+the workflow in the same PR. (`main` is not a component: it is the branch name in
+release-please's own `chore(main): release x.y.z` title, and without it the release PR
+cannot merge.) Subjects must not end with a full stop.
+
 ## Commands
 
 ```bash
