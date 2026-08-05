@@ -134,7 +134,8 @@ Directly tested: `client/socket`, `client/objects`, `client/auth` (HTTP and HTTP
 `config`, `credentials`, `sync/compare`, `sync/mapping`, `sync/safe-path` (path
 traversal, symlink-file writes, symlinked-directory writes), the `--json` record shapes,
 and the commands `pull`, `push`, `status`, `diff` (including `--against`), `watch`,
-`logs`, `list`, `start`, `stop`, `restart`, `new`, `rename`, `move`, `remove`, `backup`.
+`logs`, `list`, `start`, `stop`, `restart`, `new`, `rename`, `move`, `remove`, `backup`,
+`doctor`.
 `sync/manifest` and `sync/scan` are covered indirectly by every pull/push test.
 
 `test/cli.test.ts` spawns the built `dist/cli.js` and asserts on real argv handling.
@@ -146,7 +147,8 @@ there, and it needs `dist/` built first.**
 `test/fake-server.ts` serves HTTP and websocket on one port, as real Admin does on 8081.
 Its `auth` field selects how the HTTP side answers the probes in `client/auth.ts`
 (`disabled` → `GET /login` 404s, `oauth` → `POST /oauth/token`, `legacy` → `POST /login`);
-`reset()` returns it to `disabled`, so tests that do not care are unaffected.
+`reset()` returns it to `disabled`, so tests that do not care are unaffected. Its
+`requireCookieOnSocket` flag reproduces the silent-auth failure below.
 
 `pull` also skips-and-continues per script rather than aborting the whole run: one
 unwritable script (a bad id, a symlink in the way) is reported and the rest still
@@ -207,6 +209,27 @@ always `!allowSelfSigned` — the value is the user's decision, not a constant, 
 writing it as one both misreports what the code does and trips CodeQL's
 `js/disabling-certificate-validation`.
 
+### Two failures that look like a broken instance and are not
+
+Both cost a session an hour, and `commands/doctor.ts` exists because of them.
+
+1. **An unauthenticated socket is silent, not angry.** Admin accepts the connection,
+   sends `___ready___`, and then ignores every command. There is no auth error and no
+   close — requests simply never come back, and the only thing the caller ever sees is
+   `Request "..." timed out`. The timeout in `client/socket.ts` therefore carries a
+   hint naming this cause; `test/fake-server.ts` reproduces it via
+   `requireCookieOnSocket`.
+2. **An expired self-signed certificate is harmless here.** With `allowSelfSigned` the
+   identity check is the pinned fingerprint, not the chain, so `iob-sync` keeps working
+   after expiry while every other client on that port fails with
+   `certificate has expired`. `doctor` reports it as OK plus a note. Do not "fix" this
+   by tightening the TLS path — the pin is the check, and it is stricter than the chain.
+
+**`iob-sync` is a CLI, not a library.** `package.json` exposes `bin` only; there is no
+`exports` map and nothing under `src/` is a supported import. Anything constructing
+`AdminSocketClient` directly must reproduce `withContext` in `cli.ts` — certificate
+check, then cookie, then socket — and the failure mode when it does not is (1) above.
+
 ### Two bugs the watch tests caught
 
 Both were live in working code, and both are the kind that only show up under a test
@@ -224,8 +247,6 @@ testable at all, which matters given a regression there means an infinite push l
 
 ## Other known gaps
 
-- Self-signed certificates are honoured on the websocket path but not on the HTTP
-  auth path (would require an `undici` Agent).
 - `init --types` writes the ioBroker type definitions, but the download of
   `javascript.d.ts` from GitHub has only been exercised against a live network.
 
@@ -296,3 +317,10 @@ window so it measures the debounce rather than the disk.
 If it recurs, that file is the suspect and the fix is more timing margin — **not**
 loosening an assertion. The thing being tested is the guard against an infinite push
 loop against someone's house.
+
+One of these turned out not to be timing at all. The `--pull` case waited for the file
+content to appear and then asserted on the log line, but `applyRemote` writes the file,
+saves the manifest and logs **last** — so the assertions could run inside that window.
+It now waits for the `pull` line, which is the operation's real completion signal, and
+asserts on the file and manifest afterwards. Before assuming load, check what the code
+under test does in what order.

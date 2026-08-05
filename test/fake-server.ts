@@ -169,6 +169,20 @@ export class FakeAdminServer {
 
   /** Delay before sending `___ready___` after connect, in ms. */
   readyDelayMs = 0;
+
+  /**
+   * When true, a websocket arriving without a `Cookie` header is accepted, told
+   * `___ready___`, and then has every command frame dropped on the floor.
+   *
+   * That is what a real authenticated Admin does, and it is worth reproducing exactly
+   * because of how badly it presents: there is no auth error, no close, no anything —
+   * just requests that never come back. Both `iob-sync doctor` and the hint on the
+   * request timeout exist for this case, so both need it to be reproducible.
+   */
+  requireCookieOnSocket = false;
+
+  /** Sockets that connected without a cookie while `requireCookieOnSocket` was set. */
+  private readonly unauthenticated = new WeakSet<WebSocket>();
   /** Set to true once a client has replied `[2]` to a server-initiated `[1]` ping. */
   pongReceived = false;
 
@@ -210,8 +224,11 @@ export class FakeAdminServer {
         resolve(address.port);
       });
 
-      wss.on('connection', (ws: WebSocket) => {
+      wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
         this.sockets.add(ws);
+        if (this.requireCookieOnSocket && !req.headers.cookie) {
+          this.unauthenticated.add(ws);
+        }
 
         ws.on('message', (data: WebSocket.RawData) => {
           this.handleMessage(ws, data);
@@ -362,6 +379,7 @@ export class FakeAdminServer {
     this.failCommands.clear();
     this.delayedCommands.clear();
     this.auth = { mode: 'disabled', username: 'admin', password: 'secret' };
+    this.requireCookieOnSocket = false;
     this.httpRequests.length = 0;
     this.subscriptionRequests.length = 0;
   }
@@ -447,6 +465,8 @@ export class FakeAdminServer {
     }
 
     if (type === 3 && typeof id === 'number' && typeof name === 'string') {
+      // No reply, no error, no close — the silence is the behaviour being reproduced.
+      if (this.unauthenticated.has(ws)) return;
       this.handleCommand(ws, id, name, (args as unknown[]) ?? []);
     }
   }
