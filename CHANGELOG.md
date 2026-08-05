@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/mschmicking/iobroker-sync/compare/v1.1.0...v1.2.0) (2026-08-05)
+
+
+### Added
+
+* **cli:** add a read-only doctor command that explains itself ([#23](https://github.com/mschmicking/iobroker-sync/issues/23)) ([84dc84a](https://github.com/mschmicking/iobroker-sync/commit/84dc84a09851964ae8d37b49c1994110af7e45cd))
+
+
+### Fixed
+
+* address the two code scanning alerts ([#25](https://github.com/mschmicking/iobroker-sync/issues/25)) ([07ada65](https://github.com/mschmicking/iobroker-sync/commit/07ada6525fb78b7862bc4775a9e0b1948f71d8cd))
+
 ## [1.1.0](https://github.com/mschmicking/iobroker-sync/compare/v1.0.1...v1.1.0) (2026-08-03)
 
 
