@@ -31,6 +31,22 @@ instruction from the user:
 4. **Deletion is explicit.** Only `remove`, `rename` and `move` delete anything, each
    requires `--yes`, and each writes the full object JSON to `.iobroker-sync/trash/`
    _before_ deleting. A failed backup aborts the operation.
+
+   The one thing they delete without backing it up is the pair of adapter markers
+   belonging to the script being deleted — `javascript.<n>.scriptEnabled.<id>` and
+   `javascript.<n>.scriptProblem.<id>` — and only after that script is gone. Those are
+   adapter-generated derived state (`common.enabled` and `common.engine` are already in
+   the trash copy), so there is nothing in them to lose. See `cleanUpScriptMarkers` in
+   `commands/remove.ts` for why they have to be swept at all, and
+   `ObjectsApi.deleteScriptMarker` for the ordering rule (value first, object second,
+   never the reverse). The sweep is best-effort: it warns, it never fails the command.
+
+   **Both kinds or neither.** The adapter creates and deletes the two together, so code
+   that handles only `scriptEnabled` cleans up half a mess and reports success. That is
+   not hypothetical: the first version of this sweep shipped that way and left eight
+   orphaned `scriptProblem` states on a live instance while `doctor` called it clean.
+   `MARKER_KINDS` in `types.ts` is the single list; anything iterating markers iterates it.
+
 5. **Copy-then-delete must verify first.** ioBroker has no native rename/move, so both
    are implemented as copy-verify-delete. The verification compares the actual source
    text. Checking only that "something exists at the new id" is not verification — a

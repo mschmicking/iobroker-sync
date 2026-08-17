@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { CommandContext, UserError, ScriptObject } from '../types';
 import { idToRelPath, normalizeSource } from '../sync/mapping';
 import { loadManifest, saveManifest, removeEntry, upsertEntry } from '../sync/manifest';
-import { backupObject } from './remove';
+import { backupObject, cleanUpScriptMarkers } from './remove';
 
 /**
  * Sanitizes a single id segment: space, any remaining `.`, and the characters
@@ -60,6 +60,11 @@ export async function copyVerifyAndDelete(
   const backupPath = await backupObject(ctx, original);
   ctx.log.info(`backup   ${backupPath}`);
   await ctx.objects.deleteObject(original._id);
+
+  // The old id keeps its `scriptEnabled` markers unless someone removes them, and a
+  // rename that quietly leaves one behind every time it runs is how a system ends up
+  // with more markers than scripts.
+  await cleanUpScriptMarkers(ctx, original._id);
 }
 
 export async function rename(
