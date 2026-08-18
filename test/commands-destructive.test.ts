@@ -321,3 +321,180 @@ describe('destructive commands', () => {
     assert.deepEqual(await listTrash(project.root), []);
   });
 });
+
+/**
+ * Every javascript instance that runs a script keeps a `scriptEnabled` marker beside
+ * it, and ioBroker only ever cleans up the one belonging to the instance that owned the
+ * script at the moment it was deleted. Anything left behind is invisible to the user and
+ * complained about by js-controller forever, so the delete paths sweep it themselves.
+ */
+describe('script marker cleanup', () => {
+  let server: FakeAdminServer;
+  let port: number;
+  let project: TempProject;
+
+  const TARGET = 'script.js.common.target';
+  const OWN_MARKER = 'javascript.2.scriptEnabled.common.target';
+  // Held by an instance that does not run the script — the pair ioBroker never cleans.
+  const STALE_MARKER = 'javascript.1.scriptEnabled.common.target';
+  // The twin the adapter creates beside every scriptEnabled state, and the one the
+  // first version of this sweep missed on a real instance.
+  const STALE_PROBLEM = 'javascript.1.scriptProblem.common.target';
+  const OTHER_MARKER = 'javascript.2.scriptEnabled.other';
+
+  before(async () => {
+    server = new FakeAdminServer();
+    port = await server.start();
+  });
+
+  after(async () => {
+    await server.stop();
+  });
+
+  beforeEach(async () => {
+    server.reset();
+    server.seed([script(TARGET), script('script.js.other')]);
+    server.seedMarker(OWN_MARKER, true);
+    server.seedMarker(STALE_MARKER, true);
+    server.seedMarker(STALE_PROBLEM, false);
+    server.seedMarker(OTHER_MARKER, true);
+    if (project) await project.cleanup();
+    project = await makeTempProject();
+    await writeLocal(project, 'common/target.ts', SOURCE);
+    await writeManifest(project.root, [
+      entryFor(TARGET, 'common/target.ts', 'TypeScript/ts', SOURCE),
+    ]);
+  });
+
+  it('remove --yes sweeps the markers of the deleted script and nothing else', async () => {
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.equal(server.getObject(TARGET), null);
+    assert.deepEqual(server.stateIds(), [OTHER_MARKER], 'only the other script keeps its marker');
+    assert.equal(server.getObject(OWN_MARKER), null, 'the marker object goes too');
+    assert.equal(server.getObject(STALE_MARKER), null);
+    assert.equal(server.getObject(STALE_PROBLEM), null, 'the scriptProblem twin goes too');
+    assert.ok(t.captured.result.some((l) => l === `cleaned  ${STALE_MARKER}`));
+    assert.ok(t.captured.result.some((l) => l === `cleaned  ${STALE_PROBLEM}`));
+  });
+
+  /**
+   * Guards the specific regression: sweeping only `scriptEnabled` left the
+   * `scriptProblem` twin behind on a live instance while reporting success.
+   */
+  it('leaves no scriptProblem state behind when the scriptEnabled one is swept', async () => {
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.deepEqual(
+      server.stateIds().filter((id) => id.includes('common.target')),
+      [],
+      'no marker of either kind may survive for the deleted script',
+    );
+  });
+
+  it('remove without --yes lists the markers and deletes nothing', async () => {
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, {});
+    await t.close();
+
+    assert.deepEqual(
+      server.stateIds(),
+      [STALE_MARKER, STALE_PROBLEM, OWN_MARKER, OTHER_MARKER].sort(),
+    );
+    assert.ok(
+      t.captured.all.some((l) => l.includes(`Would clean up leftover:     ${STALE_MARKER}`)),
+    );
+  });
+
+  /**
+   * The case that makes the doctor report actionable: the script was deleted long ago,
+   * from the Admin UI or by another tool, and only the markers remain. Refusing here
+   * would leave the user with a warning nothing can clear.
+   */
+  it('remove --yes cleans markers of a script that is already gone from the server', async () => {
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, { yes: true });
+    // Second run: the object is gone, the markers are back (as if never swept).
+    server.seedMarker(STALE_MARKER, true);
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.deepEqual(server.stateIds(), [OTHER_MARKER]);
+    assert.ok(t.captured.all.some((l) => l.includes('already gone from the server')));
+    assert.ok(
+      await localExists(project, 'common/target.ts'),
+      'the local file is never touched here',
+    );
+  });
+
+  it('remove --yes still refuses an id with neither a script nor any markers', async () => {
+    const t = await makeContext(port, project);
+    await assert.rejects(() => remove(t.ctx, 'script.js.nothing-here', { yes: true }), UserError);
+    await t.close();
+  });
+
+  it('remove --dry-run does not sweep markers of an already-deleted script', async () => {
+    // Rebuild the world without the script, so the already-gone path is the one taken.
+    server.reset();
+    server.seedMarker(STALE_MARKER, true);
+    const t = await makeContext(port, project, { dryRun: true });
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.ok(server.getState(STALE_MARKER), 'dry-run must not delete anything');
+  });
+
+  it('rename --yes sweeps the markers of the old id', async () => {
+    const t = await makeContext(port, project);
+    await rename(t.ctx, TARGET, 'renamed', { yes: true });
+    await t.close();
+
+    assert.ok(server.getObject('script.js.common.renamed'), 'the rename itself must have worked');
+    assert.deepEqual(server.stateIds(), [OTHER_MARKER]);
+  });
+
+  it('move --yes sweeps the markers of the old id', async () => {
+    server.seed([
+      { _id: 'script.js.archive', type: 'channel', common: { name: 'archive' }, native: {} },
+    ]);
+    const t = await makeContext(port, project);
+    await move(t.ctx, TARGET, 'archive', { yes: true });
+    await t.close();
+
+    assert.ok(server.getObject('script.js.archive.target'));
+    assert.deepEqual(server.stateIds(), [OTHER_MARKER]);
+  });
+
+  /**
+   * The script is already deleted and backed up by the time the sweep runs, so a
+   * failure here is untidiness, not data loss. Reporting it as a failed delete would
+   * be worse than the leftover it is complaining about.
+   */
+  it('a marker that cannot be deleted warns but does not fail the command', async () => {
+    server.failCommand('delState', 'states db is read-only');
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.equal(server.getObject(TARGET), null, 'the script itself is still deleted');
+    assert.equal((await listTrash(project.root)).length, 1, 'and still backed up');
+    assert.ok(t.captured.warn.some((l) => l.includes('Could not remove the leftover state')));
+    assert.ok(server.getObject(STALE_MARKER), 'and the marker was left whole, not half-deleted');
+  });
+
+  it('a scriptEnabled lookup that fails does not stop the delete', async () => {
+    server.failCommand('getStates', 'nope');
+    server.failCommand('getForeignStates', 'nope');
+    server.failCommand('getForeignObjects', 'nope');
+    const t = await makeContext(port, project);
+    await remove(t.ctx, TARGET, { yes: true });
+    await t.close();
+
+    assert.equal(server.getObject(TARGET), null);
+    assert.equal((await listTrash(project.root)).length, 1);
+  });
+});

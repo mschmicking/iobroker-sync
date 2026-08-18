@@ -3,9 +3,9 @@
 Things that look like bugs and are not. See the [README](../README.md) for the overview.
 
 **Start with `iob-sync doctor`.** It checks the config, the certificate, the login, the
-connection and a live round-trip, and names the one that is wrong — including the two
-cases below, which are the ones that reliably send people down the wrong path. It is
-read-only and never prompts, so it is safe to run at any time.
+connection, a live round-trip and the adapter's leftover script markers, and names the one
+that is wrong — including the cases below, which are the ones that reliably send people
+down the wrong path. It is read-only and never prompts, so it is safe to run at any time.
 
 ## Commands time out, but the connection "works"
 
@@ -85,6 +85,48 @@ own scripts folder.
 a script or move it to another javascript instance, it cannot — that is deliberate, so a
 sync bug cannot stop a running script. Use `start` / `stop` for `enabled`; instance moves
 must be done in Admin.
+
+## `doctor` warns about orphaned markers
+
+Nothing is broken, and no script is affected.
+
+The javascript adapter keeps two bookkeeping states beside every script, on **every**
+javascript instance — not only the one that runs it:
+
+```
+javascript.<n>.scriptEnabled.<script id>
+javascript.<n>.scriptProblem.<script id>
+```
+
+Both are created by the adapter's `load()`, which calls `createActiveObject` and
+`createProblemObject` _before_ `prepareScript` checks `common.engine` to decide whether
+this instance should actually run the script. Every instance runs `load()` for every
+non-global script at startup, and again on every source change. So on a three-instance
+system, ten scripts mean sixty of these states, and that is normal.
+
+Deletion, however, _is_ gated on the engine: only the instance that owned the script at
+the moment it was deleted removes its own pair. The pairs on the other instances stay for
+the life of the system, js-controller complains about them, and nothing in ioBroker ever
+collects them.
+
+This has nothing to do with who did the deleting — the Admin UI leaves exactly the same
+residue. Verified against ioBroker.javascript v8.9.2.
+
+`iob-sync doctor` lists them by id, both kinds. To clear one script's leftovers:
+
+```bash
+iob-sync remove script.js.diag.retired-check --yes
+```
+
+`remove` sweeps the markers even when the script itself is already gone from the server —
+in that case it deletes nothing else and leaves your local file alone. `rename` and `move`
+sweep the old id's markers as they go, so this does not accumulate from normal use.
+
+One detail worth knowing if you clean these up by hand: delete the **state value first,
+then the object**. The reverse order leaves a value with no object behind it, which is the
+shape js-controller actually warns about — and it is the order the adapter's own cleanup
+uses (`delObject` then `delState`), so that warning may well have come from ioBroker
+itself rather than from anything you did.
 
 ## A push is refused as a conflict
 

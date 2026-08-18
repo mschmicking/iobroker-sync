@@ -27,7 +27,7 @@ import { getAuthCookie } from '../client/auth';
 import { CertificateInfo, pinningApplies, probeCertificateInfo } from '../client/tls';
 import { loadManifest } from '../sync/manifest';
 import { scanLocal, scanRemote } from '../sync/scan';
-import { Config, Logger, UserError } from '../types';
+import { Config, Logger, ObjectsApi, UserError } from '../types';
 import * as path from 'node:path';
 
 export interface DoctorOptions {
@@ -222,6 +222,63 @@ function skipped(name: string, why: string): Check {
   return { name, status: 'skip', detail: why };
 }
 
+/**
+ * `markers` — `scriptEnabled` / `scriptProblem` states left behind by scripts that no
+ * longer exist.
+ *
+ * Worth a check of its own because nothing else on the system will ever tell you. Every
+ * javascript instance creates both markers for every non-global script — `load()` makes
+ * them before `prepareScript` checks who owns the script — but only the owning instance
+ * deletes them again. So each delete strands a pair on every other instance, and they do
+ * nothing afterwards except make js-controller warn, forever, which is precisely the kind
+ * of noise that trains people to ignore their logs.
+ *
+ * Counts both kinds. Reporting only `scriptEnabled` would have called a live instance
+ * with eight orphaned `scriptProblem` states clean — it did, before this was fixed.
+ *
+ * A warning rather than a failure: nothing is broken, and this is a read-only command.
+ */
+async function checkScriptMarkers(objects: ObjectsApi, remoteIds: Set<string>): Promise<Check> {
+  let entries;
+  try {
+    entries = await objects.listScriptMarkers();
+  } catch (err) {
+    return {
+      name: 'markers',
+      status: 'warn',
+      detail: `could not be read: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const orphans = entries.filter((entry) => !remoteIds.has(entry.scriptId));
+  const detail = `${entries.length} scriptEnabled/scriptProblem state(s) across all javascript instances, ${orphans.length} orphaned`;
+
+  if (orphans.length === 0) {
+    return { name: 'markers', status: 'ok', detail };
+  }
+
+  const halved = orphans.filter((entry) => entry.hasValue && !entry.hasObject).length;
+  const scripts = Array.from(new Set(orphans.map((entry) => entry.scriptId))).sort();
+
+  // The note, not the hint: report() only prints hints for failed checks, and this is
+  // the one line someone reading a warning actually needs.
+  return {
+    name: 'markers',
+    status: 'warn',
+    detail,
+    note:
+      `${orphans.length} state(s) belong to scripts that no longer exist:\n` +
+      orphans.map((entry) => `      ${entry.id}`).join('\n') +
+      (halved > 0
+        ? `\n    ${halved} of them ${halved === 1 ? 'is a value' : 'are values'} with no object ` +
+          'behind them — that is what js-controller warns about.'
+        : '') +
+      '\n    Nothing is broken, and ioBroker never collects these itself. To clear them: ' +
+      `${scripts.map((id) => `iob-sync remove ${id} --yes`).join(', ')} — ` +
+      'remove sweeps the markers even when the script itself is already gone.',
+  };
+}
+
 function statusLabel(status: CheckStatus): string {
   return status.toUpperCase().padEnd(4);
 }
@@ -241,7 +298,7 @@ export async function doctor(
   if (tls.status === 'fail') {
     const why = 'not attempted — the certificate check failed';
     checks.push(skipped('auth', why), skipped('socket', why), skipped('round-trip', why));
-    checks.push(skipped('scripts', why));
+    checks.push(skipped('scripts', why), skipped('markers', why));
     return report(checks, log);
   }
 
@@ -250,7 +307,12 @@ export async function doctor(
 
   if (auth.check.status === 'fail') {
     const why = 'not attempted — authentication failed';
-    checks.push(skipped('socket', why), skipped('round-trip', why), skipped('scripts', why));
+    checks.push(
+      skipped('socket', why),
+      skipped('round-trip', why),
+      skipped('scripts', why),
+      skipped('markers', why),
+    );
     return report(checks, log);
   }
 
@@ -279,7 +341,7 @@ export async function doctor(
         hint: err instanceof UserError ? err.hint : undefined,
       });
       const why = 'not attempted — the socket never became ready';
-      checks.push(skipped('round-trip', why), skipped('scripts', why));
+      checks.push(skipped('round-trip', why), skipped('scripts', why), skipped('markers', why));
       return report(checks, log);
     }
 
@@ -304,16 +366,21 @@ export async function doctor(
           ? 'Run `iob-sync login` to refresh the stored password, then try again.'
           : undefined,
       });
-      checks.push(skipped('scripts', 'not attempted — the instance did not answer'));
+      const why = 'not attempted — the instance did not answer';
+      checks.push(skipped('scripts', why), skipped('markers', why));
       return report(checks, log);
     }
 
+    const objects = new AdminObjectsApi(socket);
+    let remoteIds: Set<string> | undefined;
+
     try {
       const [remote, local, manifest] = await Promise.all([
-        scanRemote(new AdminObjectsApi(socket)),
+        scanRemote(objects),
         scanLocal(path.resolve(root, config.scriptRoot)),
         loadManifest(root, (msg) => log.warn(msg)),
       ]);
+      remoteIds = new Set(remote.info.keys());
       const tracked = Object.keys(manifest.entries).length;
       checks.push({
         name: 'scripts',
@@ -330,6 +397,12 @@ export async function doctor(
         hint: err instanceof UserError ? err.hint : undefined,
       });
     }
+
+    checks.push(
+      remoteIds
+        ? await checkScriptMarkers(objects, remoteIds)
+        : skipped('markers', 'not attempted — the script list could not be read'),
+    );
   } finally {
     await socket.close().catch(() => undefined);
   }

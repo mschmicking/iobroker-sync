@@ -108,29 +108,29 @@ If `logs` shows nothing, that is usually the adapter's own log level rather than
 
 **Sync**
 
-| Command            | Description                                                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `init`             | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions. |
-| `types`            | Set up editor intellisense (`log`, `schedule`, ...). `--force`, `--offline`.                                                                                            |
-| `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                             |
-| `trust`            | Accept the instance's current TLS certificate. Only needed after it changes. `--yes` skips the prompt.                                                                  |
-| `doctor`           | Check config, certificate, login, connection and a live round-trip, and say which one is wrong. Read-only, never prompts. Run this first when something looks broken.   |
-| `pull [pattern]`   | Download scripts to disk. Never deletes or overwrites local files.                                                                                                      |
-| `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                          |
-| `status`           | Show what changed, locally and remotely.                                                                                                                                |
-| `diff [pattern]`   | Unified diff of local vs server. `--against <snapshot>` compares with a backup instead.                                                                                 |
-| `watch`            | Push on save. `--pull` also applies remote changes.                                                                                                                     |
-| `logs [pattern]`   | Stream the server log. `--level`, `--limit`. Read-only.                                                                                                                 |
-| `backup [pattern]` | Snapshot every script — source _and_ full object — to `.iobroker-sync/backup/<timestamp>/`. Read-only against the server.                                               |
+| Command            | Description                                                                                                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`             | Write `.iobroker-sync.json`, verify the connection, create the script folder. Asks interactively when run without flags. `--types` also sets up TypeScript definitions.                         |
+| `types`            | Set up editor intellisense (`log`, `schedule`, ...). `--force`, `--offline`.                                                                                                                    |
+| `login` / `logout` | Save or remove the password for this instance. Never stored in the project.                                                                                                                     |
+| `trust`            | Accept the instance's current TLS certificate. Only needed after it changes. `--yes` skips the prompt.                                                                                          |
+| `doctor`           | Check config, certificate, login, connection, a live round-trip and leftover adapter markers, and say which one is wrong. Read-only, never prompts. Run this first when something looks broken. |
+| `pull [pattern]`   | Download scripts to disk. Never deletes or overwrites local files.                                                                                                                              |
+| `push [pattern]`   | Upload locally modified scripts. Never deletes remote objects.                                                                                                                                  |
+| `status`           | Show what changed, locally and remotely.                                                                                                                                                        |
+| `diff [pattern]`   | Unified diff of local vs server. `--against <snapshot>` compares with a backup instead.                                                                                                         |
+| `watch`            | Push on save. `--pull` also applies remote changes.                                                                                                                                             |
+| `logs [pattern]`   | Stream the server log. `--level`, `--limit`. Read-only.                                                                                                                                         |
+| `backup [pattern]` | Snapshot every script — source _and_ full object — to `.iobroker-sync/backup/<timestamp>/`. Read-only against the server.                                                                       |
 
 **Lifecycle**
 
-| Command                                  | Description                                                                                                       |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `list`                                   | All scripts with instance and enabled state.                                                                      |
-| `start` / `stop` / `restart` `<pattern>` | Toggle `common.enabled`.                                                                                          |
-| `new <path>`                             | Create a new script (disabled) plus any missing folders.                                                          |
-| `rename` / `move` / `remove`             | Destructive. Require `--yes` and back up the object first. `remove` keeps the local file unless `--delete-local`. |
+| Command                                  | Description                                                                                                                                                                                                                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list`                                   | All scripts with instance and enabled state.                                                                                                                                                                                                |
+| `start` / `stop` / `restart` `<pattern>` | Toggle `common.enabled`.                                                                                                                                                                                                                    |
+| `new <path>`                             | Create a new script (disabled) plus any missing folders.                                                                                                                                                                                    |
+| `rename` / `move` / `remove`             | Destructive. Require `--yes` and back up the object first. `remove` keeps the local file unless `--delete-local`. All three also clean up the `scriptEnabled`/`scriptProblem` states the old id leaves behind on every javascript instance. |
 
 `--dry-run`, `--verbose`, `--json` and `-C <dir>` are global and work with every command.
 When in doubt, `--dry-run` shows what would happen and changes nothing.

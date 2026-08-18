@@ -239,3 +239,229 @@ describe('AdminObjectsApi: deleteObject', () => {
     });
   });
 });
+
+describe('AdminObjectsApi: script markers', () => {
+  /**
+   * Mirrors a real instance: every instance holds markers for scripts it does not run,
+   * `gone` has no script left at all, and each script carries a `scriptProblem` twin
+   * alongside its `scriptEnabled` one.
+   */
+  function seedMarkers(server: FakeAdminServer): void {
+    server.seedMarker('javascript.1.scriptEnabled.common.garage', true);
+    server.seedMarker('javascript.3.scriptEnabled.common.garage', false);
+    server.seedMarker('javascript.2.scriptEnabled.diag.gone', true);
+    // Not a marker: same namespace, different purpose. Must never be picked up.
+    server.seedMarker('javascript.0.variables.someUserState', 42);
+    // Nor is this: right shape, but the instance is not a number.
+    server.seedMarker('javascript.admin.scriptEnabled.nope', true);
+  }
+
+  test('lists markers across instances and ignores other javascript states', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      const entries = await api.listScriptMarkers();
+
+      assert.deepEqual(
+        entries.map((e) => e.id),
+        [
+          'javascript.1.scriptEnabled.common.garage',
+          'javascript.2.scriptEnabled.diag.gone',
+          'javascript.3.scriptEnabled.common.garage',
+        ],
+      );
+      assert.deepEqual(
+        entries.map((e) => e.scriptId),
+        ['script.js.common.garage', 'script.js.diag.gone', 'script.js.common.garage'],
+      );
+      assert.ok(entries.every((e) => e.hasValue && e.hasObject));
+    });
+  });
+
+  test('reports each half of a marker separately', async () => {
+    await withApi(async (api, server) => {
+      server.seedMarker('javascript.1.scriptEnabled.a', true, { valueOnly: true });
+      server.seedMarker('javascript.2.scriptEnabled.b', true, { objectOnly: true });
+
+      const entries = await api.listScriptMarkers();
+      const byId = new Map(entries.map((e) => [e.id, e]));
+
+      assert.deepEqual(
+        { ...byId.get('javascript.1.scriptEnabled.a') },
+        {
+          id: 'javascript.1.scriptEnabled.a',
+          scriptId: 'script.js.a',
+          kind: 'scriptEnabled',
+          hasValue: true,
+          hasObject: false,
+        },
+      );
+      assert.deepEqual(
+        { ...byId.get('javascript.2.scriptEnabled.b') },
+        {
+          id: 'javascript.2.scriptEnabled.b',
+          scriptId: 'script.js.b',
+          kind: 'scriptEnabled',
+          hasValue: false,
+          hasObject: true,
+        },
+      );
+    });
+  });
+
+  test('falls back to getForeignStates on an instance without getStates', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      server.failCommand('getStates', 'Unknown command: getStates');
+
+      const entries = await api.listScriptMarkers();
+      assert.equal(entries.length, 3);
+      assert.ok(entries.every((e) => e.hasValue));
+    });
+  });
+
+  test('still reports markers when the object side cannot be read', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      server.failCommand('getForeignObjects', 'permission denied');
+
+      const entries = await api.listScriptMarkers();
+      assert.equal(entries.length, 3);
+      assert.ok(entries.every((e) => e.hasValue && !e.hasObject));
+    });
+  });
+
+  test('deleteScriptMarker removes the value and the object', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      const id = 'javascript.2.scriptEnabled.diag.gone';
+      const entry = (await api.listScriptMarkers()).find((e) => e.id === id)!;
+
+      await api.deleteScriptMarker(entry);
+
+      assert.equal(server.getState(id), null, 'the value must be gone');
+      assert.equal(server.getObject(id), null, 'the object must be gone');
+      assert.ok(server.getState('javascript.1.scriptEnabled.common.garage'), 'others untouched');
+    });
+  });
+
+  test('deletes the object separately where delState leaves it behind', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      // The behaviour of older Admin builds: the value goes, the object stays.
+      server.delStateAlsoDeletesObject = false;
+      const id = 'javascript.2.scriptEnabled.diag.gone';
+      const entry = (await api.listScriptMarkers()).find((e) => e.id === id)!;
+
+      await api.deleteScriptMarker(entry);
+
+      assert.equal(server.getState(id), null);
+      assert.equal(server.getObject(id), null, 'the follow-up delObject must have run');
+    });
+  });
+
+  /**
+   * The failure mode that matters: deleting the object while the value survives is
+   * what produces the "state has no object" warning in the first place. A delState
+   * that fails must abort before that can happen.
+   */
+  test('a failed value delete leaves the object alone rather than orphaning it', async () => {
+    await withApi(async (api, server) => {
+      seedMarkers(server);
+      const id = 'javascript.2.scriptEnabled.diag.gone';
+      const entry = (await api.listScriptMarkers()).find((e) => e.id === id)!;
+      server.failCommand('delState', 'states db is read-only');
+
+      await assert.rejects(() => api.deleteScriptMarker(entry));
+
+      assert.ok(server.getState(id), 'the value is still there');
+      assert.ok(server.getObject(id), 'so the object must be too');
+    });
+  });
+
+  test('refuses an id outside the marker namespaces', async () => {
+    await withApi(async (api, server) => {
+      server.seedMarker('javascript.0.variables.someUserState', 42);
+
+      await assert.rejects(
+        () =>
+          api.deleteScriptMarker({
+            id: 'javascript.0.variables.someUserState',
+            scriptId: 'script.js.someUserState',
+            kind: 'scriptEnabled',
+            hasValue: true,
+            hasObject: true,
+          }),
+        /Refusing to delete/,
+      );
+      assert.ok(server.getState('javascript.0.variables.someUserState'));
+    });
+  });
+
+  /**
+   * The defect a live instance caught: the adapter creates `scriptEnabled` and
+   * `scriptProblem` together and deletes them together, so anything that handles only
+   * the first cleans up half a mess and reports success.
+   */
+  test('lists scriptProblem states alongside scriptEnabled ones', async () => {
+    await withApi(async (api, server) => {
+      server.seedMarker('javascript.1.scriptEnabled.diag.gone', true);
+      server.seedMarker('javascript.1.scriptProblem.diag.gone', false);
+      server.seedMarker('javascript.2.scriptProblem.diag.gone', false);
+
+      const entries = await api.listScriptMarkers();
+
+      assert.deepEqual(
+        entries.map((e) => `${e.kind} ${e.id}`),
+        [
+          'scriptEnabled javascript.1.scriptEnabled.diag.gone',
+          'scriptProblem javascript.1.scriptProblem.diag.gone',
+          'scriptProblem javascript.2.scriptProblem.diag.gone',
+        ],
+      );
+      assert.ok(
+        entries.every((e) => e.scriptId === 'script.js.diag.gone'),
+        'both kinds must map back to the same script',
+      );
+    });
+  });
+
+  /**
+   * A script may legitimately be *named* after a marker kind, which puts the infix in the
+   * id twice. Only the leading occurrence, right after a numeric instance, identifies the
+   * marker; the rest belongs to the script name. Getting this backwards would map a state
+   * onto the wrong script — the one mistake here that could delete something real.
+   */
+  test('maps an id whose script name contains a marker kind back to the right script', async () => {
+    await withApi(async (api, server) => {
+      server.seedMarker('javascript.1.scriptProblem.foo.scriptEnabled.bar', false);
+
+      const entries = await api.listScriptMarkers();
+
+      assert.equal(entries.length, 1);
+      assert.deepEqual(
+        { ...entries[0] },
+        {
+          id: 'javascript.1.scriptProblem.foo.scriptEnabled.bar',
+          scriptId: 'script.js.foo.scriptEnabled.bar',
+          kind: 'scriptProblem',
+          hasValue: true,
+          hasObject: true,
+        },
+      );
+    });
+  });
+
+  test('deletes a scriptProblem state the same way', async () => {
+    await withApi(async (api, server) => {
+      const id = 'javascript.2.scriptProblem.diag.gone';
+      server.seedMarker(id, false);
+      const entry = (await api.listScriptMarkers()).find((e) => e.id === id)!;
+
+      assert.equal(entry.kind, 'scriptProblem');
+      await api.deleteScriptMarker(entry);
+
+      assert.equal(server.getState(id), null);
+      assert.equal(server.getObject(id), null);
+    });
+  });
+});

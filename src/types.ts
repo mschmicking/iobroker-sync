@@ -97,6 +97,44 @@ export interface ObjectViewResult<T> {
   rows: { id: string; value: T }[];
 }
 
+/**
+ * The two per-script bookkeeping states the javascript adapter maintains.
+ *
+ * They are created together by `load()` and deleted together in the same block, so
+ * anything that treats one without the other cleans up half a mess and reports
+ * success — verified the hard way against a live instance, which had eight orphaned
+ * `scriptProblem` states while reporting zero orphaned `scriptEnabled` ones.
+ */
+export const MARKER_KINDS = ['scriptEnabled', 'scriptProblem'] as const;
+
+export type MarkerKind = (typeof MARKER_KINDS)[number];
+
+/**
+ * One `javascript.<n>.<kind>.<suffix>` entry — per-script bookkeeping the javascript
+ * adapter keeps beside every script, on every instance.
+ *
+ * Every instance creates both markers for every non-global script, because `load()`
+ * calls `createActiveObject`/`createProblemObject` before `prepareScript` checks
+ * whether this instance actually owns the script (verified in ioBroker.javascript
+ * v8.9.2, both at startup and on every source change). Only the owning instance ever
+ * deletes them again, so each delete strands one pair per other instance.
+ *
+ * Both halves are tracked separately because they rot apart. `hasValue && !hasObject`
+ * is the combination js-controller warns about on every restart, and the adapter
+ * itself can produce it: its cleanup calls `delObject` before `delState`.
+ */
+export interface ScriptMarkerEntry {
+  /** e.g. "javascript.2.scriptEnabled.common.garage". */
+  id: string;
+  /** The script it belongs to, e.g. "script.js.common.garage". */
+  scriptId: string;
+  kind: MarkerKind;
+  /** A value is stored under this id. */
+  hasValue: boolean;
+  /** An object is defined for this id. */
+  hasObject: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------
@@ -194,6 +232,21 @@ export interface ObjectsApi {
   ensureFolders(scriptId: string): Promise<string[]>;
   /** Delete an object. Callers must have obtained explicit confirmation and written a backup. */
   deleteObject(id: string): Promise<void>;
+  /**
+   * Every script marker on the instance — both kinds, across all javascript instances.
+   *
+   * Deliberately unfiltered: callers narrow by `scriptId` themselves. Building a
+   * server-side pattern out of a script id would mean interpolating an id into a
+   * wildcard expression, and the one thing that must never happen here is a delete
+   * loop running against a pattern that matched more than it was meant to.
+   */
+  listScriptMarkers(): Promise<ScriptMarkerEntry[]>;
+  /**
+   * Delete one marker: the value first, then the object. Never the other way round —
+   * an object deleted out from under a surviving value is precisely the state that
+   * makes js-controller warn forever.
+   */
+  deleteScriptMarker(entry: ScriptMarkerEntry): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

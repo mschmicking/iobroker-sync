@@ -154,11 +154,23 @@ function deepMerge(
   return dest;
 }
 
+/** ioBroker id pattern (`javascript.*.scriptEnabled.*`) as a regex. `*` is the only wildcard. */
+function patternToRegExp(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`);
+}
+
 export class FakeAdminServer {
   private wss: WebSocket.Server | null = null;
   private httpServer: http.Server | null = null;
   private readonly sockets = new Set<WebSocket>();
   private readonly objects = new Map<string, IoBrokerObject>();
+  /**
+   * State *values*, stored independently of `objects` — which is the entire point.
+   * In a real ioBroker the states DB and the objects DB are separate, and a value
+   * outliving its object is both possible and the condition this suite has to cover.
+   */
+  private readonly states = new Map<string, { val: unknown; ack: boolean }>();
   private readonly failCommands = new Map<string, string>();
   private readonly delayedCommands = new Map<string, number>();
   private corruptNextSetObjectFn: ((obj: IoBrokerObject) => IoBrokerObject) | null = null;
@@ -370,10 +382,48 @@ export class FakeAdminServer {
     }
   }
 
+  /**
+   * Real Admin's `delState` removes the object along with the value. Older builds do
+   * not, and `AdminObjectsApi.deleteScriptMarker` is written to cope with either, so
+   * the fake can be put into either mode.
+   */
+  delStateAlsoDeletesObject = true;
+
   seed(objects: IoBrokerObject[]): void {
     for (const obj of objects) {
       this.objects.set(obj._id, obj);
     }
+  }
+
+  /**
+   * Seeds a `scriptEnabled` marker the way the javascript adapter writes one: a state
+   * object plus a boolean value. `objectOnly`/`valueOnly` create the half-rotted forms.
+   */
+  seedMarker(
+    id: string,
+    val: unknown = true,
+    opts: { objectOnly?: boolean; valueOnly?: boolean } = {},
+  ): void {
+    if (!opts.valueOnly) {
+      this.objects.set(id, {
+        _id: id,
+        type: 'state',
+        common: { name: id, type: 'boolean', role: 'indicator.state' },
+        native: {},
+      } as unknown as IoBrokerObject);
+    }
+    if (!opts.objectOnly) {
+      this.states.set(id, { val, ack: true });
+    }
+  }
+
+  getState(id: string): { val: unknown; ack: boolean } | null {
+    return this.states.get(id) ?? null;
+  }
+
+  /** Ids of every stored state value, sorted. */
+  stateIds(): string[] {
+    return Array.from(this.states.keys()).sort();
   }
 
   /**
@@ -383,6 +433,8 @@ export class FakeAdminServer {
    */
   reset(): void {
     this.objects.clear();
+    this.states.clear();
+    this.delStateAlsoDeletesObject = true;
     this.corruptNextSetObjectFn = null;
     this.failCommands.clear();
     this.delayedCommands.clear();
@@ -556,6 +608,41 @@ export class FakeAdminServer {
         this.objects.delete(objId);
         this.reply(ws, id, null, null);
         this.emitObjectChange(objId, null);
+        return;
+      }
+
+      // `getForeignStates` is the deprecated alias real Admin still answers; the client
+      // falls back to it, so the fake has to be able to be the instance where only it works.
+      case 'getStates':
+      case 'getForeignStates': {
+        const [pattern] = args as [string];
+        const match = patternToRegExp(pattern ?? '*');
+        const out: Record<string, unknown> = Object.create(null);
+        for (const [stateId, value] of this.states) {
+          if (match.test(stateId)) out[stateId] = value;
+        }
+        this.reply(ws, id, null, out);
+        return;
+      }
+
+      case 'getForeignObjects': {
+        const [pattern, type] = args as [string, string | undefined];
+        const match = patternToRegExp(pattern ?? '*');
+        const out: Record<string, unknown> = Object.create(null);
+        for (const [objId, obj] of this.objects) {
+          if (match.test(objId) && (!type || obj.type === type)) out[objId] = obj;
+        }
+        this.reply(ws, id, null, out);
+        return;
+      }
+
+      case 'delState': {
+        const [stateId] = args as [string];
+        this.states.delete(stateId);
+        if (this.delStateAlsoDeletesObject) {
+          this.objects.delete(stateId);
+        }
+        this.reply(ws, id, null, null);
         return;
       }
 

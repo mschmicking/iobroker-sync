@@ -108,7 +108,7 @@ describe('doctor', () => {
       const { captured, error } = await run(project.root, config());
 
       assert.equal(error, undefined);
-      for (const name of ['config', 'tls', 'auth', 'socket', 'round-trip', 'scripts']) {
+      for (const name of ['config', 'tls', 'auth', 'socket', 'round-trip', 'scripts', 'markers']) {
         assert.equal(statusOf(captured, name), 'ok', `${name} should have passed`);
       }
       assert.ok(captured.result.includes('OK.'));
@@ -128,8 +128,84 @@ describe('doctor', () => {
 
       const checks = captured.data.filter((d) => (d as { type?: string }).type === 'check');
       const verdicts = captured.data.filter((d) => (d as { type?: string }).type === 'doctor');
-      assert.equal(checks.length, 6);
+      assert.equal(checks.length, 7);
       assert.deepEqual(verdicts, [{ type: 'doctor', ok: true, failed: 0, notes: [] }]);
+    });
+  });
+
+  describe('script markers', () => {
+    it('says so plainly when there is nothing left lying around', async () => {
+      const { captured } = await run(project.root, config());
+
+      assert.equal(statusOf(captured, 'markers'), 'ok');
+      assert.match(detailOf(captured, 'markers'), /0 scriptEnabled\/scriptProblem.*0 orphaned/);
+    });
+
+    it('counts markers of live scripts without flagging them', async () => {
+      // defaultSeed() has script.js.common.garage on javascript.1.
+      server.seedMarker('javascript.1.scriptEnabled.common.garage', true);
+      server.seedMarker('javascript.1.scriptProblem.common.garage', false);
+
+      const { captured } = await run(project.root, config());
+
+      assert.equal(statusOf(captured, 'markers'), 'ok');
+      assert.match(detailOf(captured, 'markers'), /2 scriptEnabled\/scriptProblem.*0 orphaned/);
+    });
+
+    /**
+     * The condition the whole check exists for: a deleted script whose markers stayed
+     * behind on the instances that did not own it — including the `scriptProblem` twin,
+     * which an earlier version of this check ignored while reporting zero orphans.
+     */
+    it('warns about markers whose script no longer exists, and names them', async () => {
+      server.seedMarker('javascript.1.scriptEnabled.common.garage', true);
+      server.seedMarker('javascript.3.scriptEnabled.diag.retired-check', true);
+      server.seedMarker('javascript.2.scriptEnabled.diag.retired-check', true, {
+        valueOnly: true,
+      });
+
+      const { captured, error } = await run(project.root, config());
+
+      assert.equal(statusOf(captured, 'markers'), 'warn');
+      assert.match(detailOf(captured, 'markers'), /3 scriptEnabled\/scriptProblem.*2 orphaned/);
+
+      const note = detailOf(captured, 'markers');
+      assert.match(note, /javascript\.2\.scriptEnabled\.diag\.retired-check/);
+      assert.match(note, /javascript\.3\.scriptEnabled\.diag\.retired-check/);
+      assert.doesNotMatch(note, /javascript\.1\./, 'a live script must not be listed');
+      // The half-rotted one is the one js-controller actually complains about.
+      assert.match(note, /1 of them is a value with no object behind them/);
+      assert.match(note, /iob-sync remove script\.js\.diag\.retired-check --yes/);
+
+      // A warning, not a failure: nothing here is broken.
+      assert.equal(error, undefined);
+      assert.ok(captured.result.includes('OK with notes.'));
+    });
+
+    it('counts an orphaned scriptProblem state even when its scriptEnabled twin is gone', async () => {
+      // Exactly the state a live instance was left in by a sweep that knew only one kind.
+      server.seedMarker('javascript.2.scriptProblem.diag.retired-check', false);
+
+      const { captured } = await run(project.root, config());
+
+      assert.equal(statusOf(captured, 'markers'), 'warn');
+      assert.match(detailOf(captured, 'markers'), /1 scriptEnabled\/scriptProblem.*1 orphaned/);
+      assert.match(
+        detailOf(captured, 'markers'),
+        /javascript\.2\.scriptProblem\.diag\.retired-check/,
+      );
+    });
+
+    it('does not fail the whole diagnostic when the markers cannot be read', async () => {
+      server.failCommand('getStates', 'nope');
+      server.failCommand('getForeignStates', 'nope');
+      server.failCommand('getForeignObjects', 'nope');
+
+      const { captured, error } = await run(project.root, config());
+
+      assert.equal(statusOf(captured, 'markers'), 'warn');
+      assert.equal(statusOf(captured, 'scripts'), 'ok');
+      assert.equal(error, undefined);
     });
   });
 
@@ -165,6 +241,7 @@ describe('doctor', () => {
       const { captured } = await run(project.root, config());
 
       assert.equal(statusOf(captured, 'scripts'), 'skip');
+      assert.equal(statusOf(captured, 'markers'), 'skip');
     });
   });
 
@@ -175,7 +252,7 @@ describe('doctor', () => {
       const { captured, error } = await run(project.root, config({ username: 'admin' }));
 
       assert.equal(statusOf(captured, 'auth'), 'fail');
-      for (const name of ['socket', 'round-trip', 'scripts']) {
+      for (const name of ['socket', 'round-trip', 'scripts', 'markers']) {
         assert.equal(statusOf(captured, name), 'skip', `${name} was not knowable`);
       }
       assert.match(String(error?.hint), /iob-sync login/);

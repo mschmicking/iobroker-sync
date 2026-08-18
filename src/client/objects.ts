@@ -6,9 +6,12 @@
 import {
   FolderObject,
   IoBrokerObject,
+  MARKER_KINDS,
+  MarkerKind,
   ObjectsApi,
   ObjectViewResult,
   ScriptCommon,
+  ScriptMarkerEntry,
   ScriptObject,
   SocketClient,
 } from '../types';
@@ -16,6 +19,43 @@ import {
 const SCRIPT_NAMESPACE = 'script.js.';
 // Verified endkey used by the Admin UI itself to bound a getObjectView range scan.
 const VIEW_ENDKEY = `${SCRIPT_NAMESPACE}香`;
+
+const JS_NAMESPACE = 'javascript.';
+
+/** `javascript.*.<kind>.*` — every instance's markers of one kind, for every script. */
+function markerPattern(kind: MarkerKind): string {
+  return `${JS_NAMESPACE}*.${kind}.*`;
+}
+
+/**
+ * Splits a marker id into the script it belongs to and which kind it is:
+ * `javascript.2.scriptEnabled.common.garage` -> `script.js.common.garage`, scriptEnabled.
+ *
+ * Returns null for anything that is not one — including ids with something other than
+ * a bare instance number in front of the kind, so that a state someone else parked
+ * under `javascript.` cannot be mistaken for ours and deleted.
+ */
+export function parseMarkerId(stateId: string): { scriptId: string; kind: MarkerKind } | null {
+  if (!stateId.startsWith(JS_NAMESPACE)) {
+    return null;
+  }
+  for (const kind of MARKER_KINDS) {
+    const infix = `.${kind}.`;
+    const kindAt = stateId.indexOf(infix);
+    if (kindAt === -1) {
+      continue;
+    }
+    const instance = stateId.slice(JS_NAMESPACE.length, kindAt);
+    if (!/^\d+$/.test(instance)) {
+      continue;
+    }
+    const suffix = stateId.slice(kindAt + infix.length);
+    if (suffix) {
+      return { scriptId: `${SCRIPT_NAMESPACE}${suffix}`, kind };
+    }
+  }
+  return null;
+}
 
 export class AdminObjectsApi implements ObjectsApi {
   constructor(private readonly socket: SocketClient) {}
@@ -110,5 +150,90 @@ export class AdminObjectsApi implements ObjectsApi {
   /** Deletion policy (confirmation, backup) lives in the command layer, not here. */
   async deleteObject(id: string): Promise<void> {
     await this.socket.emit('delObject', [id]);
+  }
+
+  /**
+   * Reads the value side and the object side separately and unions them, because a
+   * marker can exist as either half alone and the halves are what we need to tell apart.
+   *
+   * One half failing is tolerated: `getStates` and `getForeignObjects` are separate
+   * commands with separate histories across Admin versions, and a partial answer here
+   * still beats reporting nothing. Only a total failure propagates.
+   */
+  async listScriptMarkers(): Promise<ScriptMarkerEntry[]> {
+    const perKind = await Promise.all(MARKER_KINDS.map((kind) => this.listMarkersOfKind(kind)));
+    return perKind.flat().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+
+  private async listMarkersOfKind(kind: MarkerKind): Promise<ScriptMarkerEntry[]> {
+    const pattern = markerPattern(kind);
+    const [values, objects] = await Promise.allSettled([
+      this.readMarkerValues(pattern),
+      this.socket.emit<Record<string, unknown> | null>('getForeignObjects', [pattern, 'state']),
+    ]);
+
+    if (values.status === 'rejected' && objects.status === 'rejected') {
+      throw values.reason;
+    }
+
+    const valueIds = new Set(values.status === 'fulfilled' ? Object.keys(values.value ?? {}) : []);
+    const objectIds = new Set(
+      objects.status === 'fulfilled' ? Object.keys(objects.value ?? {}) : [],
+    );
+
+    const entries: ScriptMarkerEntry[] = [];
+    for (const id of new Set([...valueIds, ...objectIds])) {
+      const parsed = parseMarkerId(id);
+      // The pattern is a wildcard match, so it can catch ids that merely look the part
+      // (`javascript.0.scriptEnabled` with no suffix, or a non-numeric instance).
+      // parseMarkerId is the authority on what is really ours.
+      if (parsed?.kind !== kind) {
+        continue;
+      }
+      entries.push({
+        id,
+        scriptId: parsed.scriptId,
+        kind,
+        hasValue: valueIds.has(id),
+        hasObject: objectIds.has(id),
+      });
+    }
+    return entries;
+  }
+
+  /**
+   * `getStates` is the current command; `getForeignStates` is its deprecated alias and
+   * the only one older Admin builds answer. Trying both costs one extra round trip on
+   * instances that need it and nothing on instances that do not.
+   */
+  private async readMarkerValues(pattern: string): Promise<Record<string, unknown> | null> {
+    try {
+      return await this.socket.emit<Record<string, unknown> | null>('getStates', [pattern]);
+    } catch {
+      return this.socket.emit<Record<string, unknown> | null>('getForeignStates', [pattern]);
+    }
+  }
+
+  async deleteScriptMarker(entry: ScriptMarkerEntry): Promise<void> {
+    if (!parseMarkerId(entry.id)) {
+      // Belt and braces: this API is reachable from command code, and the whole point
+      // of it is deleting things, so it refuses anything outside its own namespace.
+      throw new Error(`Refusing to delete "${entry.id}": not a script marker.`);
+    }
+
+    // Value first. If this throws we stop here on purpose — deleting the object while
+    // the value survives would manufacture the exact orphan this code exists to remove.
+    if (entry.hasValue) {
+      await this.socket.emit('delState', [entry.id]);
+    }
+
+    if (entry.hasObject) {
+      // Admin's delState is documented to take the object with it. Verify rather than
+      // assume: on an instance where it does not, the object has to go separately.
+      const remaining = await this.socket.emit<IoBrokerObject | null>('getObject', [entry.id]);
+      if (remaining) {
+        await this.socket.emit('delObject', [entry.id]);
+      }
+    }
   }
 }
