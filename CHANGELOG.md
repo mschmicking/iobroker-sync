@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/mschmicking/iobroker-sync/compare/v1.2.0...v1.3.0) (2026-08-18)
+
+
+### Added
+
+* **cli:** sweep the adapter markers a deleted script leaves behind ([#30](https://github.com/mschmicking/iobroker-sync/issues/30)) ([da1692c](https://github.com/mschmicking/iobroker-sync/commit/da1692c2b3709dbf9ea7616f97b45efc4d7db7cd))
+
+
+### Fixed
+
+* **deps:** bump js-yaml and brace-expansion out of their advisories ([#31](https://github.com/mschmicking/iobroker-sync/issues/31)) ([021472a](https://github.com/mschmicking/iobroker-sync/commit/021472a1ac55be1674fc9c25e0e1b8ca1efa6445))
+* **deps:** Bump ws from 8.21.1 to 8.21.3 ([#28](https://github.com/mschmicking/iobroker-sync/issues/28)) ([475ddcf](https://github.com/mschmicking/iobroker-sync/commit/475ddcf6bae46377e35694f38fec040065e614dd))
+
 ## [1.2.0](https://github.com/mschmicking/iobroker-sync/compare/v1.1.0...v1.2.0) (2026-08-05)
 
 
