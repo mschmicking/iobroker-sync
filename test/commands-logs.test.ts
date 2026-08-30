@@ -49,16 +49,44 @@ describe('logs', () => {
     project = await makeTempProject();
   });
 
-  it('asks the server for the log stream', async () => {
+  /**
+   * The wire command, pinned deliberately.
+   *
+   * This used to assert `subscribe:log` and passed, because the fake broadcast log
+   * frames to every connection regardless. Against the real Admin, `subscribe` takes a
+   * state id pattern — so the client was asking to watch states named `log`, getting an
+   * acknowledgement, and receiving nothing ever. Verified on the live instance
+   * 2026-08-30. Assert the command, not just that lines arrive, or a fake that is too
+   * generous hides the bug again.
+   */
+  it('asks the server for the log stream with requireLog', async () => {
     const t = await makeContext(port, project);
     const handle = await logs(t.ctx);
     try {
       assert.ok(
-        server.subscriptionRequests.includes('subscribe:log'),
-        `expected a log subscription, got ${JSON.stringify(server.subscriptionRequests)}`,
+        server.logRequests.includes('requireLog:true'),
+        `expected requireLog(true), got ${JSON.stringify(server.logRequests)}`,
+      );
+      assert.ok(
+        !server.subscriptionRequests.includes('subscribe:log'),
+        'subscribe(["log"]) is a state pattern and never delivers logs — do not send it',
       );
     } finally {
       await handle.stop();
+      await t.close();
+    }
+  });
+
+  it('turns the log stream off again when stopped', async () => {
+    const t = await makeContext(port, project);
+    const handle = await logs(t.ctx);
+    await handle.stop();
+    try {
+      assert.ok(
+        server.logRequests.includes('requireLog:false'),
+        `expected requireLog(false) on stop, got ${JSON.stringify(server.logRequests)}`,
+      );
+    } finally {
       await t.close();
     }
   });

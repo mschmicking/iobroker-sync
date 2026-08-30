@@ -101,8 +101,9 @@ iob-sync logs garage           # only lines mentioning "garage"
 iob-sync logs --level error    # only failures
 ```
 
-If `logs` shows nothing, that is usually the adapter's own log level rather than a fault
-— see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+If `logs` shows nothing at `info` and above while scripts are demonstrably running, that
+is a bug and not your instance — see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+Missing `debug` lines specifically are usually the adapter's own log level.
 
 ## Commands
 
