@@ -347,19 +347,29 @@ export class AdminSocketClient implements SocketClient {
   /**
    * Subscribes to the server log stream.
    *
-   * The wire command is the generic `subscribe` with the literal type `log` — not a
-   * `subscribeLog` of its own. Server-side that flips `requireLog(true)` on the
-   * adapter, after which log lines arrive as ordinary `[0, null, "log", [entry]]`
-   * message frames.
+   * The wire command is `requireLog`, which is its own command and not a variant of
+   * `subscribe`. Admin's generic `subscribe` takes a *state* id pattern, so
+   * `subscribe(['log'])` is a well-formed request to watch states named `log` — of
+   * which there are none. It is accepted, it acknowledges, and it delivers nothing
+   * for the rest of time.
+   *
+   * That is exactly what it did. This was misdiagnosed once already as "the house was
+   * simply quiet" (see the docs note about adapter log levels, which is true and was
+   * not the cause), and the cost of the wrong conclusion was a whole debugging session
+   * spent on the instance rather than the client. Verified against the live instance
+   * on 2026-08-30: `requireLog([true])` delivers `javascript.*` lines within a second
+   * of a script restart, `subscribe(['log'])` delivers nothing across 25 s.
+   *
+   * Once enabled, lines arrive as ordinary `[0, <id>, "log", [entry]]` message frames.
    */
   async subscribeLog(handler: LogHandler): Promise<void> {
     this.logHandlers.push(handler);
-    await this.emit('subscribe', ['log']);
+    await this.emit('requireLog', [true]);
   }
 
   async unsubscribeLog(): Promise<void> {
     this.logHandlers.length = 0;
-    await this.emit('unsubscribe', ['log']);
+    await this.emit('requireLog', [false]);
   }
 
   private handleCallback(id: number, args: unknown[] | undefined): void {

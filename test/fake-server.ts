@@ -164,6 +164,17 @@ export class FakeAdminServer {
   private wss: WebSocket.Server | null = null;
   private httpServer: http.Server | null = null;
   private readonly sockets = new Set<WebSocket>();
+  /**
+   * Sockets that have asked for logs with `requireLog(true)`.
+   *
+   * The fake used to broadcast log frames to every connection, which is why it happily
+   * agreed with a client that sent `subscribe(['log'])` — a command the real Admin
+   * accepts as a *state* pattern and then never acts on. The suite passed for months
+   * against a fake that shared the client's misunderstanding. Gating delivery here is
+   * the whole point: it is what makes the wire command a tested contract instead of a
+   * comment.
+   */
+  private readonly logSubscribers = new Set<WebSocket>();
   private readonly objects = new Map<string, IoBrokerObject>();
   /**
    * State *values*, stored independently of `objects` — which is the entire point.
@@ -186,6 +197,9 @@ export class FakeAdminServer {
 
   /** Generic `subscribe`/`unsubscribe` calls, e.g. `subscribe:log`. */
   readonly subscriptionRequests: string[] = [];
+
+  /** Every `requireLog` call, as `requireLog:true` / `requireLog:false`. */
+  readonly logRequests: string[] = [];
 
   /** Delay before sending `___ready___` after connect, in ms. */
   readyDelayMs = 0;
@@ -256,6 +270,7 @@ export class FakeAdminServer {
 
         ws.on('close', () => {
           this.sockets.delete(ws);
+          this.logSubscribers.delete(ws);
         });
 
         const sendReady = () => {
@@ -442,6 +457,11 @@ export class FakeAdminServer {
     this.requireCookieOnSocket = false;
     this.httpRequests.length = 0;
     this.subscriptionRequests.length = 0;
+    this.logRequests.length = 0;
+    // Not the socket set itself: `reset` runs between tests while connections from the
+    // previous one may still be closing, and dropping them here would be a different
+    // kind of lie. Only the recorded intent is cleared.
+    this.logSubscribers.clear();
   }
 
   getObject(id: string): IoBrokerObject | null {
@@ -454,8 +474,10 @@ export class FakeAdminServer {
 
   /** Broadcast an objectChange message to all connected clients (bypassing storage). */
   /**
-   * Pushes a log line to every connected client, as the real server does after a
-   * `subscribe(['log'])`. Shape mirrors ioBroker's log objects.
+   * Pushes a log line to every client that asked for logs with `requireLog(true)`,
+   * as the real server does. Shape mirrors ioBroker's log objects.
+   *
+   * A client that never sent `requireLog` receives nothing — see `logSubscribers`.
    */
   emitLog(entry: { message: string; severity?: string; from?: string; ts?: number }): void {
     const payload = {
@@ -464,7 +486,7 @@ export class FakeAdminServer {
       from: entry.from ?? 'javascript.0',
       ts: entry.ts ?? Date.now(),
     };
-    for (const ws of this.sockets) {
+    for (const ws of this.logSubscribers) {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify([0, null, 'log', [payload]]));
       }
@@ -657,10 +679,25 @@ export class FakeAdminServer {
 
       case 'subscribe':
       case 'unsubscribe': {
-        // The generic subscribe, used with the literal type 'log'. Recorded so a
-        // test can assert the client asked for logs before expecting any.
+        // The generic subscribe. In the real Admin this takes a *state id pattern*,
+        // so `subscribe(['log'])` is a request to watch states named `log` — accepted,
+        // acknowledged, and silent forever. Recorded, but deliberately does not enable
+        // log delivery: that is the bug this fake now refuses to reproduce.
         const [what] = (args as string[]) ?? [];
         this.subscriptionRequests.push(`${name}:${what}`);
+        this.reply(ws, id, null, null);
+        return;
+      }
+
+      case 'requireLog': {
+        // The actual log command. Only this turns the stream on.
+        const [enabled] = (args as [boolean]) ?? [false];
+        this.logRequests.push(`requireLog:${enabled}`);
+        if (enabled) {
+          this.logSubscribers.add(ws);
+        } else {
+          this.logSubscribers.delete(ws);
+        }
         this.reply(ws, id, null, null);
         return;
       }

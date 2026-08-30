@@ -41,7 +41,14 @@ other tools happy, regenerate the certificate on the instance and then run
 
 ## `logs` prints the banner and nothing else
 
-It is streaming; there is simply nothing to show. Two things surprise people:
+**First: if you are on a version before the `requireLog` fix, this is a bug and no amount
+of adapter configuration will help.** `subscribeLog` used to send `subscribe(['log'])`.
+Admin's generic `subscribe` takes a _state id pattern_, so that asked to watch states
+named `log`, of which there are none — accepted, acknowledged, and silent forever. The
+wire command is `requireLog`. Upgrade; nothing about your instance is wrong.
+
+That bug was originally misdiagnosed as the two entries below, which are both real but
+were not the cause. If you are current and still see silence, they are what to check:
 
 - **`--level` only narrows what the server already sends.** An ioBroker adapter emits
   nothing below _its own_ configured log level, so asking for `--level debug` while
@@ -52,7 +59,9 @@ It is streaming; there is simply nothing to show. Two things surprise people:
   worked. Your own `log()` calls are info-level and do appear.
 
 To prove the stream is alive, run `iob-sync logs` and then any `iob-sync` command in a
-second terminal: Admin logs every connection at info, so a line appears immediately.
+second terminal: Admin logs every connection at info, so a line appears immediately. Note
+that this check is what _should_ have caught the `requireLog` bug and did not — treat a
+silent result from it as the client being broken, not as the house being quiet.
 
 ## Every script shows `Cannot find name 'log'`
 
