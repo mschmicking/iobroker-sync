@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1](https://github.com/mschmicking/iobroker-sync/compare/v1.3.0...v1.3.1) (2026-08-30)
+
+
+### Fixed
+
+* **logs:** send requireLog, the command that actually streams logs ([#33](https://github.com/mschmicking/iobroker-sync/issues/33)) ([aaa8468](https://github.com/mschmicking/iobroker-sync/commit/aaa8468a24348c7b14af4929c373de0434c5dc18))
+
 ## [1.3.0](https://github.com/mschmicking/iobroker-sync/compare/v1.2.0...v1.3.0) (2026-08-18)
 
 
